@@ -235,6 +235,19 @@ textarea:disabled::placeholder { color: var(--disabled); }
 .list .chips button:hover, .list .tries button:hover { border-color: var(--accent); }
 .list .chips button[aria-pressed="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
 .side .sec p.note { color: var(--ink); line-height: 1.55; }
+.tasks { display: grid; gap: 6px; }
+.list .tk { display: block; width: 100%; text-align: left; font: inherit; border: 1px solid var(--rule); background: var(--panel); color: var(--ink); border-radius: 10px; padding: 8px 10px; cursor: pointer; }
+.list .tk b { font-size: .8rem; font-weight: 500; }
+.list button.tk:hover { border-color: var(--accent); }
+.tk.on { border: 1px solid var(--accent); background: color-mix(in srgb, var(--accent) 7%, var(--panel)); border-radius: 10px; padding: 10px 12px; display: grid; gap: 6px; }
+.tk.on b { font-size: .84rem; font-weight: 600; }
+.side .sec .tk .who { margin: 0; font-size: .76rem; color: var(--ink-soft); line-height: 1.5; }
+.tk ol { margin: 0; padding-left: 20px; display: grid; gap: 4px; font-size: .78rem; line-height: 1.45; }
+.tk li.ok { color: var(--ink-soft); text-decoration: line-through; }
+.tk li.ok::marker { content: '✓  '; color: #1f9d55; }
+.side .sec .tk .recap { margin: 2px 0 0; font-size: .76rem; line-height: 1.55; color: var(--ink); background: color-mix(in srgb, #1f9d55 12%, transparent); border-radius: 8px; padding: 6px 8px; }
+.list .tk .nx, .list .tk .again { display: inline-block; justify-self: start; font: inherit; font-size: .74rem; border: 0; background: none; color: var(--accent); padding: 2px 0; cursor: pointer; }
+.list .tk .nx { font-weight: 600; }
 .tg { font-size: .72rem; color: var(--ink-soft); margin: 8px 0 4px; }
 /* 情境清單 */
 .side { background: var(--panel); border: 1px solid var(--rule); border-radius: 12px; display: flex; flex-direction: column; max-height: calc(100vh - 40px); position: sticky; top: 20px; }
@@ -366,7 +379,8 @@ const SEED = {
   '小組討論分組': [['u','小組討論'],['a','要建立幾個小組？'],['u','3 組'],['ok','已建立 3 組討論區塊，並開啟記分板。']] };
 const seedHist = () => HIST.map(([g, l]) => [g, l.map(title => ({ title, msgs: SEED[title].map(([t, text]) => ({ t, text, undo: false })) }))]);
 const fresh = () => ({ bg: 'base', winX: 16, open: true, view: 'chat', msgs: [], text: '', skill: null, skillSel: false, busy: false, quota: false, hint: null,
-  menuIdx: 0, more: null, hist: seedHist(), chatRef: null, quotaMode: 'ok', net: 'ok', nextErr: null, histMenu: null, histHover: null, dialog: false, anchor: null, scrollTop: false, await: null });
+  menuIdx: 0, more: null, hist: seedHist(), chatRef: null, quotaMode: 'ok', net: 'ok', nextErr: null, histMenu: null, histHover: null, dialog: false, anchor: null, scrollTop: false, await: null, log: [] });
+const L = (type, v) => { S.log.push([type, v == null ? '' : String(v)]); };
 
 /* ---------- 視窗渲染 ---------- */
 let render = function () {
@@ -503,7 +517,7 @@ function stream(text, from = 0) {
   later(300, step);
 }
 function stop() { if (!S.busy) return; clearTimers(); S.cancel && S.cancel(); S.cancel = null; S.busy = false; S.msgs = S.msgs.filter(m => m.t !== 'status' && m.t !== 'plan'); render(); }
-const ok = (text, revert) => push({ t: 'ok', text, undo: true, revert });
+const ok = (text, revert) => { L('ok', text); return push({ t: 'ok', text, undo: true, revert }); };
 
 function saveChat() {
   if (!S.msgs.some(m => m.t === 'u')) return;
@@ -527,9 +541,10 @@ function send(text, skill, noAnim) {
   S.msgs = S.msgs.filter(m => m.t !== 'err');
   S.more = null; S.hint = null;
   const overflow = (() => { const c = $('content'); return c && c.scrollHeight > c.clientHeight + 4; })();
+  L('send', full);
   S.msgs.push({ t: 'u', text: full }); S.anchor = overflow ? S.msgs.length - 1 : null;
   render();
-  if (S.quotaMode === 'last') { S.quotaMode = 'empty'; S.quota = true; push({ t: 'quota' }); return; }
+  if (S.quotaMode === 'last') { S.quotaMode = 'empty'; S.quota = true; push({ t: 'quota' }); L('quota'); return; }
   route(full);
 }
 // 畫布上有什麼：指令依此判斷能不能做、做完換成哪張畫布
@@ -539,7 +554,7 @@ const CAP = {
   attBefore: { links: 6 }, attDone: { pages: 3 }, attStay: { links: 6, pages: 3 }, clsStay: { stickies: 6 }, brainDone: { stickies: 8 }, clsDone: { stickies: 6 }, sumDone: { stickies: 6 }, groupDone: { groups: 4 }, groupTeam: { groups: 4 },
   court: {}, math: {}, sci: {}, chi: {}, eng: {}, quiz: {}, team: {}, split: {} };
 const cap = () => CAP[S.bg] || {};
-const reply = (ms, m) => think(ms, () => S.msgs.push(typeof m === 'string' ? { t: 'a', text: m } : m));
+const reply = (ms, m) => think(ms, () => { if (m && m.t === 'err') L('err', m.text); S.msgs.push(typeof m === 'string' ? { t: 'a', text: m } : m); });
 function route(full) {
   const [cmd, ...rest] = full.split(' '); const arg = rest.join(' ').trim(); const c = cap();
   if (/不適宜|髒話/.test(full)) return reply(900, { t: 'err', text: '偵測到不適宜內容，已由內容守門員封鎖。', blocked: true });
@@ -658,10 +673,10 @@ document.addEventListener('click', e => {
     case 'dok': { const [g, k] = S.delKey.split(':').map(Number); const [del] = S.hist[g][1].splice(k, 1); if (del === S.chatRef) S.chatRef = null; S.dialog = false; S.histMenu = null; render(); return; }
     case 'clearsel': S.bg = S.bg === 'cls2' ? 'stickies' : 'base'; render(); return;
     case 'tobottom': { const c = $('content'); c.scrollTo({ top: c.scrollHeight, behavior: 'smooth' }); return; }
-    case 'undo': m.undo = false; S.msgs.push({ t: 'u', text: '復原' }); if (m.revert) S.bg = m.revert; render(); return think(800, () => S.msgs.push({ t: 'a', text: /籃球場/.test(m.text) ? '已回復上一步的變更。需要換成其他球場圖嗎？' : '已回復上一步的變更。' }));
+    case 'undo': L('undo'); m.undo = false; S.msgs.push({ t: 'u', text: '復原' }); if (m.revert) S.bg = m.revert; render(); return think(800, () => S.msgs.push({ t: 'a', text: /籃球場/.test(m.text) ? '已回復上一步的變更。需要換成其他球場圖嗎？' : '已回復上一步的變更。' }));
     case 'exp': m.exp = !m.exp; render(); return;
     case 'pick': {
-      if (S.busy) return; const v = t.dataset.v; m.answered = true; S.msgs.forEach(x => { if (x.t === 'ok') x.undo = false; });
+      if (S.busy) return; const v = t.dataset.v; L('pick', v); m.answered = true; S.msgs.forEach(x => { if (x.t === 'ok') x.undo = false; });
       if (m.kind === 'group') { S.msgs.push({ t: 'u', text: v }); render(); return doGroup(parseInt(v, 10)); }
       if (m.kind === 'team') { S.msgs.push({ t: 'u', text: v }); render(); return doGroup(parseInt(v, 10), true); }
       if (m.kind === 'course') { S.msgs.push({ t: 'u', text: COURSE_USER[v] || v }); render(); return think(700, () => S.msgs.push({ t: 'multi', text: '要開啟哪些小工具？', items: TOOLS[v], on: TOOLS[v].map(() => true), verb: '開啟', kind: 'tools', course: v })); }
@@ -670,17 +685,17 @@ document.addEventListener('click', e => {
     }
     case 'cyes': { m.answered = true; const to = m.to || '白'; S.msgs.push({ t: 'u', text: '確定' }); render(); return plan({ title: '批次修改顏色', steps: ['解除 2 張便利貼的鎖定',`更新為${to}色`,'完成並回報結果'], lock: 'bulkLock', done: b => { S.bg = 'stickies'; ok(`已解除鎖定，並將 2 張便利貼更新為${to}色。`, b); } }); }
     case 'cno': m.answered = true; S.msgs.push({ t: 'u', text: '取消' }); render(); return;
-    case 'item': m.on[+t.dataset.k] = !m.on[+t.dataset.k]; render(); return;
+    case 'item': L('item'); m.on[+t.dataset.k] = !m.on[+t.dataset.k]; render(); return;
     case 'all': { const all = m.on.every(Boolean); m.on = m.on.map(() => !all); render(); return; }
     case 'mcancel': m.answered = true; S.msgs.push({ t: 'u', text: '取消' }); render(); return;
     case 'mok': {
-      const n = m.on.filter(Boolean).length; m.answered = true; S.msgs.forEach(x => { if (x.t === 'ok') x.undo = false; });
+      const n = m.on.filter(Boolean).length; L('mok', m.kind); m.answered = true; S.msgs.forEach(x => { if (x.t === 'ok') x.undo = false; });
       if (m.kind === 'tools') { S.msgs.push({ t: 'u', text: `開啟 ${n} 項` }); render(); const [img, txt] = COURSE_DONE[m.course]; return think(1000, () => { S.bg = img; ok(txt, 'base'); if (m.course === '小組活動') S.msgs.push({ t: 'single', text: '您要開啟幾分割畫布？', opts: ['2 格','3 格'], short: true, kind: 'split' }); }); }
       if (m.kind === 'gram5') { S.msgs.push({ t: 'u', text: `更正 ${n} 項` }); render(); return think(1000, () => { S.bg = 'gramDone'; ok(`校對完成，共修正 ${n} 處文字。`, m.revertBg); }); }
       S.msgs.push({ t: 'u', text: `更正 ${n} 項` }); render(); return think(1000, () => ok(`校對完成，共修正 ${n} 處文字。`, S.bg));
     }
-    case 'retry': if (S.busy) return; S.msgs.splice(i, 1); render(); return route(m.redo);
-    case 'nav': if (m.target) { S.bg = m.target; render(); } return;
+    case 'retry': if (S.busy) return; L('retry'); S.msgs.splice(i, 1); render(); return route(m.redo);
+    case 'nav': L('nav'); if (m.target) { S.bg = m.target; render(); } return;
   }
 });
 $('aiHot').onclick = () => { S.open = !S.open; render(); };
@@ -698,7 +713,48 @@ const TRY = [
   ['Skill', ['/', '/group', '/group 10', '/classify', '/summarize', '/grammar-check', '/attachment', '/bulk-edit 把粉紅色便利貼改成白色', '/bulk-edit 把紅色便利貼改成白色', '/bulk-edit 把文字改成粗體', '/bulk-edit']],
   ['能力範圍', ['課堂講解', '腦力激盪', '小組討論', '請幫我開啟分割畫布']],
   ['一般對話', ['請換成籃球場背景', '請檢查這頁有無錯別字', '1 加到 10 =', '請幫我整理這頁便利貼的重點', '什麼是畢氏定理？', '畫一個 80°-60°-40° 的三角形', '請把這頁的便利貼依顏色分組', '（不適宜內容測試）']]];
+/* ---------- 測試任務：給角色與目標，依實際操作自動打勾 ---------- */
+const has = (type, test) => S.log.some(([t, v]) => t === type && (!test || (typeof test === 'string' ? v === test : test(v))));
+const after = (a, b) => { const i = S.log.findIndex(([t]) => t === a); return i >= 0 && S.log.slice(i + 1).some(([t]) => t === b); };
+const TASKS = [
+  { t: '幫數學課開好小工具', who: '你是數學老師，上課前想一次開好需要的工具。', env: {},
+    steps: [['點建議卡「課堂講解」', () => has('send', '課堂講解')], ['課程類型選「數學」', () => has('pick', '數學')], ['確認要開啟的小工具，按「開啟 N 項」', () => has('mok', 'tools')], ['看畫布：可縮小的收到右上角小視窗', () => S.bg === 'math']],
+    recap: 'AI 先問課程、再列出對應工具讓你勾選；有小視窗的工具會收到右上角，其餘照原始尺寸開在畫布上。' },
+  { t: '把學生的便利貼分群', who: '學生剛貼完 6 張點子，你想讓 AI 依語意整理。', env: { bg: 'stickies' },
+    steps: [['輸入「/classify」送出（打 / 會跳出 Skill 選單）', () => has('send', v => v.startsWith('/classify'))], ['處理時畫布被鎖定、出現「AI 編輯中」', () => has('nav') || ['clsStay', 'clsDone'].includes(S.bg)], ['按「前往查看」開啟新增的分群頁', () => S.bg === 'clsDone']],
+    recap: 'Skill 執行時畫布會鎖住避免誤動；分群結果放在新頁，按「前往查看」才切過去，按鈕會留在對話裡。' },
+  { t: '只更正部分錯字', who: '頁面上的文字有錯字，但其中一個是刻意的用字，不想改。', env: { bg: 'gramBefore' },
+    steps: [['輸入「/grammar-check」送出', () => has('send', v => v.startsWith('/grammar-check'))], ['在列表中取消勾選任一項', () => has('item')], ['按「更正 N 項」', () => has('mok', 'gram5')]],
+    recap: '多選快速回覆預設全選，可以取消個別項目；全不勾時「更正 0 項」會停用。' },
+  { t: '分組後反悔', who: '你幫全班分成 4 組，但發現分錯了想退回。', env: { bg: 'stickies' },
+    steps: [['輸入「/group」送出', () => has('send', v => v.startsWith('/group'))], ['選組數（可按「更多選項」看到 7、8 組）', () => has('pick', v => /組$/.test(v))], ['畫布出現分組區後，按「復原」', () => has('undo')]],
+    recap: '組數超過 5 個會收進「更多選項」；「復原」只出現在最新一則成功回饋，按了畫布會退回上一步。' },
+  { t: '網路斷線時', who: '教室網路不穩，你送出指令後失敗了。', env: { bg: 'stickies', net: 'off' },
+    steps: [['送出「請把這頁的便利貼依顏色分組」', () => has('send', v => /依顏色分組/.test(v))], ['看到紅色錯誤訊息', () => has('err')], ['右側「網路」切回正常', () => has('err') && S.net === 'ok'], ['按「再試一次」，成功後錯誤訊息消失', () => after('retry', 'ok')]],
+    recap: '可重試的錯誤會給「再試一次」；重試成功後錯誤訊息不保留，只留成功結果。' },
+  { t: 'AI 點數用完', who: '這個月的 AI 點數剛好用到最後一次。', env: { quotaMode: 'last' },
+    steps: [['隨便送出一句話（例如「1 加到 10 =」）', () => has('send')], ['輸入框上方出現點數不足提示', () => has('quota')], ['試著再打字：可以打，但送不出去', () => S.quota && S.text.length > 0]],
+    recap: '點數不足時提示固定在輸入框上方；輸入框照常可打字，只有送出停用。' },
+];
+let curTask = -1;
+function startTask(k) {
+  curTask = k; clearTimers(); S = fresh(); S.instant = true;
+  const e = TASKS[k].env; if (e.bg) S.bg = e.bg; if (e.net) S.net = e.net; if (e.quotaMode) S.quotaMode = e.quotaMode;
+  render(); syncPanel();
+}
+function renderTasks() {
+  const box = $('tasks'); if (!box) return;
+  let h = '<h4>測試任務<small>選一個情境，照步驟操作，完成的步驟會自動打勾</small></h4><div class="tasks">';
+  TASKS.forEach((tk, k) => {
+    if (k !== curTask) { h += `<button type="button" class="tk" data-task="${k}"><b>${k + 1}. ${tk.t}</b></button>`; return; }
+    const done = tk.steps.map(s => !!s[1]());
+    const all = done.every(Boolean);
+    h += `<div class="tk on"><b>${k + 1}. ${tk.t}</b><p class="who">${tk.who}</p><ol>${tk.steps.map((s, i) => `<li class="${done[i] ? 'ok' : ''}">${s[0]}</li>`).join('')}</ol>${all ? `<p class="recap">✓ 完成！${tk.recap}</p>${k + 1 < TASKS.length ? `<button type="button" class="nx" data-task="${k + 1}">下一個任務 →</button>` : ''}` : ''}<button type="button" class="again" data-task="${k}">↺ 重來</button></div>`;
+  });
+  box.innerHTML = h + '</div>';
+}
 function syncPanel() {
+  renderTasks();
   $('cv').innerHTML = `目前畫布：<b>${CANVAS_NAME[S.bg] || S.bg}</b>`;
   document.querySelectorAll('[data-canvas]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.canvas === S.bg)));
   document.querySelectorAll('[data-env]').forEach(b => b.setAttribute('aria-pressed', String(String(S[b.dataset.env]) === b.dataset.v)));
@@ -715,17 +771,18 @@ function fillTry(t) {
   if (sk) { S.skill = sk[0]; S.skillSel = false; S.text = t.slice(sk[0].length).trim(); } else { S.skill = null; S.text = t; }
   S.menuIdx = 0; render(); const ta = $('ta'); if (ta && !ta.disabled) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
 }
-$('panel').innerHTML = `<div class="sec"><h4>畫布內容</h4><p id="cv"></p><div class="chips">${CANVAS_OPTS.map(([k, n]) => `<button type="button" data-canvas="${k}">${n}</button>`).join('')}</div></div>`
+$('panel').innerHTML = `<div class="sec" id="tasks"></div><div class="sec"><h4>畫布內容</h4><p id="cv"></p><div class="chips">${CANVAS_OPTS.map(([k, n]) => `<button type="button" data-canvas="${k}">${n}</button>`).join('')}</div></div>`
   + ENV.map(([key, label, opts]) => `<div class="sec"><h4>${label}</h4><div class="chips">${opts.map(([v, n]) => `<button type="button" data-env="${key}" data-v="${v}">${n}</button>`).join('')}</div></div>`).join('')
   + `<div class="sec"><h4>規格備註</h4><p class="note">小工具開啟規則：有小視窗功能的工具，開啟後預設為小視窗，由畫面右上角往下排列（距右 24、距上 64、間距 16）；沒有小視窗的工具以原始尺寸顯示在預設位置；需要使用者先作決定的工具（如記分板選隊伍數）停在選擇畫面。</p></div>`
   + `<div class="sec"><h4>試試看<small>點了會填進輸入框，按 Enter 送出</small></h4>${TRY.map(([g, l]) => `<div class="tg">${g}</div><div class="tries">${l.map(t => `<button type="button" data-try="${esc(t)}">${esc(t)}</button>`).join('')}</div>`).join('')}</div>`;
 $('panel').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.task != null) return startTask(+b.dataset.task);
   if (b.dataset.canvas) return setCanvas(b.dataset.canvas);
   if (b.dataset.env) return setEnv(b.dataset.env, b.dataset.v);
   if (b.dataset.try != null) return fillTry(b.dataset.try);
 });
-$('reset').onclick = () => { clearTimers(); S = fresh(); render(); syncPanel(); };
+$('reset').onclick = () => { curTask = -1; clearTimers(); S = fresh(); render(); syncPanel(); };
 const _render = render; render = function () { _render(); if ($('cv')) syncPanel(); };
 S = fresh(); render(); syncPanel();
 })();
