@@ -1,0 +1,724 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>EZWrite6 AI Agent</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Roboto:wght@400;500&display=swap">
+<style>
+/* 舞台 1920×1080 依 Figma 原尺寸刻，JS 等比縮放；畫布用 Figma 匯出底圖，AI 視窗為可互動 HTML */
+:root {
+  --page: #eceef2; --panel: #ffffff; --ink: #23262f; --ink-soft: #5e6372; --rule: #d8dbe3; --accent: #4a6ee4;
+  --text: #595959; --hint: #6a6a6a; --strong: #424242; --supporting: #3e5ec7; --disabled: rgba(89,89,89,.3);
+  --subtle: #f1f1f1; --selected: rgba(74,110,228,.15); --hover: #f6f8fe; --list-hover: rgba(165,183,242,.10);
+  --sep: #cdcdcd; --primary: #4a6ee4; --primary-pressed: #3e5ec7; --outlined: #6a6a6a;
+  --red1: #feede9; --red: #d71a09; --violet: #713dff; --violet2: #efe8ff; --muted: #8f9090;
+  --cjk: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+  --latin: "Roboto", "Noto Sans TC", sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --page: #15171d; --panel: #1f222b; --ink: #eceef4; --ink-soft: #a4a9b8; --rule: #2f3341; color-scheme: dark; } }
+:root[data-theme="dark"] { --page: #15171d; --panel: #1f222b; --ink: #eceef4; --ink-soft: #a4a9b8; --rule: #2f3341; color-scheme: dark; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink); font-family: var(--cjk); }
+.wrap { max-width: 1760px; margin: 0 auto; padding-block: 20px 40px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; grid-template-columns: minmax(0,1fr) 300px; gap: 20px; align-items: start; }
+@media (max-width: 1000px) { .wrap { grid-template-columns: minmax(0,1fr); } }
+.top { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 8px 16px; }
+.top h1 { margin: 0; font-size: 1.4rem; text-wrap: balance; }
+.top p { margin: 4px 0 0; color: var(--ink-soft); font-size: .88rem; line-height: 1.55; max-width: 80ch; }
+.tools { display: flex; gap: 8px; }
+.tools button { font: inherit; font-size: .82rem; border: 1px solid var(--rule); background: var(--panel); color: var(--ink); border-radius: 999px; padding: 6px 14px; cursor: pointer; }
+.tools button:hover { border-color: var(--accent); }
+.outer { width: 100%; aspect-ratio: 16/9; position: relative; overflow: hidden; border-radius: 12px; box-shadow: 0 6px 24px rgba(0,0,0,.18); background: #d9d9d9; }
+.outer:fullscreen { border-radius: 0; background: #000; }
+.stage { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; color: var(--text); font-family: var(--cjk); overflow: hidden; }
+.bg { position: absolute; inset: 0; width: 1920px; height: 1080px; display: block; user-select: none; }
+/* AI 編輯中鎖定區：微光由左到右掃過（位置對齊 Figma ai-editing-lock） */
+.sweep { position: absolute; border-radius: 8px; overflow: hidden; pointer-events: none; opacity: 0; transition: opacity .4s; }
+.sweep.on { opacity: 1; }
+.sweep[hidden] { display: none; }
+/* 掃光調輕：細一點的半透明白光、慢一點；外圈只留淡淡的呼吸光暈，不加底色 */
+.sweep::after { content: ""; position: absolute; top: -10%; bottom: -10%; left: 0; width: 28%; background: linear-gradient(100deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.32) 50%, rgba(255,255,255,0) 100%); animation: sweep 2.6s ease-in-out infinite; }
+@keyframes sweep { from { transform: translateX(-120%); } to { transform: translateX(380%); } }
+.sweep.on { animation: lockPulse 2.4s ease-in-out infinite; }
+@keyframes lockPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(74,110,228,0), 0 0 8px rgba(74,110,228,.12); }
+  50% { box-shadow: 0 0 0 2px rgba(74,110,228,.18), 0 0 20px rgba(74,110,228,.22); }
+}
+@media (prefers-reduced-motion: reduce) { .sweep::after { animation: none; opacity: 0; } .sweep.on { animation-duration: 4s; } }
+/* 視窗內捲軸：白色軌道＋灰色圓角滑塊 */
+.stage { color-scheme: light; }
+.stage * { scrollbar-width: thin; scrollbar-color: #8f9090 #fff; }
+.stage *::-webkit-scrollbar { width: 8px; height: 8px; background: #fff; }
+.stage *::-webkit-scrollbar-track { background: #fff; border-radius: 4px; }
+.stage *::-webkit-scrollbar-thumb { background: #8f9090; border-radius: 4px; border: 1px solid #fff; }
+.stage *::-webkit-scrollbar-corner { background: #fff; }
+.ai-hot { position: absolute; left: 445px; top: 990px; width: 60px; height: 60px; border-radius: 50%; border: 0; background: transparent; cursor: pointer; }
+/* 底圖烤進了藍色外圈：default 用白邊蓋掉，只有滑鼠 hover 時才露出藍圈；點開後滑鼠移開即消失 */
+.ai-hot::before { content: ""; position: absolute; inset: -3px; border-radius: 50%; border: 12px solid #fff; transition: opacity .15s; pointer-events: none; }
+.ai-hot:hover::before { opacity: 0; }
+.ai-hot:focus-visible { outline: 3px solid var(--primary); outline-offset: 3px; }
+.scrim { position: absolute; inset: 0; background: rgba(0,0,0,.4); }
+.dialog { position: absolute; left: 704px; top: 390px; width: 512px; height: 300px; background: #fff; border-radius: 12px; display: grid; grid-template-rows: 1fr auto; padding: 0 0 40px; box-shadow: 0 8px 24px rgba(0,0,0,.2); }
+.dialog p { margin: 0; align-self: center; text-align: center; font-size: 18px; color: var(--text); }
+.dialog .row { display: flex; justify-content: center; gap: 32px; }
+.dialog .btn { width: 168px; height: 56px; font-size: 18px; }
+
+/* AI 視窗 480×805 */
+.win { position: absolute; left: 16px; top: 159px; width: 480px; height: 805px; border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; background: linear-gradient(180deg, #fff 0%, #f9f9f9 100%); box-shadow: 0 4px 16px rgba(0,0,0,.16); }
+.win[hidden] { display: none; }
+.head { flex: none; height: 64px; display: grid; grid-template-columns: 40px 1fr 40px; gap: 8px; align-items: center; padding: 10px 16px; background: #fff; border-bottom: 1px solid var(--sep); }
+.head h2 { margin: 0; text-align: center; font: 400 24px/28px var(--latin); color: var(--text); }
+.head h2.cjk { font-family: var(--cjk); }
+.ib { width: 40px; height: 40px; border: 0; padding: 0; background: transparent; border-radius: 50%; display: grid; place-items: center; cursor: pointer; }
+.ib:hover { background: #f1f1f1; }
+.ib svg { display: block; }
+.content { position: relative; flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-width: thin; }
+.col { min-height: 100%; padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+.col::before { content: ""; flex: 1 1 auto; margin-bottom: -16px; }
+.col.welcome-mode { justify-content: center; }
+.col.welcome-mode::before { display: none; }
+.col.list-mode { padding: 16px 16px 24px; gap: 0; }
+.col.list-mode::before { display: none; }
+.foot { position: relative; flex: none; padding: 8px 24px 16px; display: flex; flex-direction: column; gap: 8px; }
+/* 選取／額度提示浮在輸入框上方，不擠壓對話區，首頁內容不會跟著上移 */
+.foot .hints { position: absolute; left: 24px; right: 24px; bottom: 100%; display: flex; flex-direction: column; gap: 8px; z-index: 1; }
+.col.has-hint { padding-bottom: 80px; }
+.disc { text-align: center; font-size: 12px; line-height: 14px; color: var(--hint); }
+
+.welcome { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.welcome h3 { margin: 0; font: 500 24px/29px var(--cjk); color: var(--text); }
+.sug { padding: 8px 16px; }
+.sug > svg { flex: none; }
+.enter { animation: msgIn .32s cubic-bezier(.2,.8,.2,1) both; }
+.u.enter { transform-origin: 100% 100%; }
+@keyframes msgIn { from { opacity: 0; transform: translateY(14px) scale(.98); } }
+.col.leaving .welcome, .col.leaving .sugs { animation: wOut .24s cubic-bezier(.4,0,1,1) both; }
+.col.leaving .sugs { animation-delay: .03s; }
+@keyframes wOut { to { opacity: 0; transform: translateY(-20px) scale(.97); } }
+.col.w-in .welcome, .col.w-in .sugs { animation: msgIn .36s cubic-bezier(.2,.8,.2,1) both; }
+.col.w-in .sugs { animation-delay: .06s; }
+@media (prefers-reduced-motion: reduce) { .enter, .col.w-in .welcome, .col.w-in .sugs, .col.leaving .welcome, .col.leaving .sugs { animation: none; } }
+.btn:disabled:not(.pri) { opacity: .3; cursor: default; background: #fff; }
+.sugs { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.sug { width: 432px; display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 12px; border: 1px solid var(--sep); background: #fff; text-align: left; cursor: pointer; font: inherit; color: var(--text); }
+.sug:hover { background: var(--hover); }
+.sug:disabled { cursor: default; background: #fff; }
+.sug:disabled > * { opacity: .3; }
+.sug .tx { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.sug b { font: 500 18px/22px var(--cjk); color: var(--text); }
+.sug small { font: 400 14px/17px var(--cjk); color: var(--hint); }
+
+.u { align-self: flex-end; max-width: 400px; background: var(--primary); color: #fff; padding: 12px 16px; border-radius: 16px; font-size: 18px; line-height: 22px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.a { align-self: flex-start; max-width: 400px; background: var(--subtle); color: var(--text); padding: 12px 16px; border-radius: 16px; font-size: 18px; line-height: 26px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.cursor { display: inline-block; width: 2px; height: 20px; background: var(--text); vertical-align: -3px; margin-left: 2px; animation: blink 1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.r { align-self: flex-start; width: 400px; background: var(--subtle); border-radius: 16px; padding: 12px 16px; display: flex; flex-direction: column; gap: 12px; font-size: 18px; line-height: 22px; color: var(--text); }
+.r.err { background: var(--red1); }
+.r .msg { white-space: pre-wrap; }
+.r .emsg { display: flex; gap: 8px; align-items: flex-start; }
+.r .emsg svg { flex: none; margin: -4px 0 -4px -3px; }
+.acts { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.acts.end { justify-content: flex-end; }
+.acts.stack { flex-direction: column; align-items: flex-start; }
+.btn { height: 44px; padding: 10px 24px; border-radius: 9999px; border: 1.5px solid var(--outlined); background: #fff; color: var(--text); font: 400 18px/22px var(--cjk); cursor: pointer; white-space: nowrap; }
+.btn:hover { background: #f4f4f4; }
+.btn.pri { background: var(--primary); border-color: var(--primary); color: #fff; }
+.btn.pri:hover { background: var(--primary-pressed); border-color: var(--primary-pressed); }
+.btn.sec { border-color: var(--primary); color: var(--primary); }
+.btn.sec:hover { background: var(--hover); }
+.btn.pri:disabled { background: #cdcdcd; border-color: #cdcdcd; color: #fff; cursor: default; }
+.btn:focus-visible, .lk:focus-visible, .chk:focus-visible, .ib:focus-visible, .sug:focus-visible, .mi:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.lk { border: 0; background: none; font: 400 18px/22px var(--cjk); color: var(--text); cursor: pointer; display: inline-flex; align-items: center; gap: 0; padding: 6px 4px 6px 24px; border-radius: 24px; height: 44px; }
+.lk:hover { background: rgba(0,0,0,.06); }
+.lk.plain { padding: 6px 8px; }
+.items { display: flex; flex-direction: column; }
+.it { display: flex; align-items: center; gap: 8px; min-height: 37px; cursor: pointer; }
+.it.all { justify-content: space-between; border-bottom: 1px solid var(--sep); padding-bottom: 6px; margin-bottom: 6px; cursor: default; }
+.it.all .l { display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 500; }
+.chk { width: 30px; height: 30px; border: 0; padding: 0; background: none; cursor: pointer; flex: none; }
+.chk svg { display: block; }
+.status { align-self: flex-start; display: flex; align-items: center; gap: 8px; padding: 8px 0; font-size: 18px; line-height: 22px; color: var(--hint); }
+.spark { animation: spark 1.2s ease-in-out infinite; flex: none; }
+@keyframes spark { 0% { transform: scale(.8) rotate(0) } 50% { transform: scale(1) rotate(45deg) } 100% { transform: scale(.8) rotate(90deg) } }
+.shimmer { background: linear-gradient(90deg, var(--hint) 0%, var(--hint) 35%, #d0d0d0 50%, var(--hint) 65%, var(--hint) 100%); background-size: 250% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: shimmer 1.6s linear infinite; }
+@keyframes shimmer { from { background-position: 100% 0 } to { background-position: 0% 0 } }
+.plan { align-self: flex-start; width: 400px; display: flex; flex-direction: column; gap: 12px; }
+.plan .task { display: flex; flex-direction: column; gap: 2px; }
+.plan .tr { display: flex; align-items: center; gap: 8px; }
+.plan .tr b { flex: 1; font: 500 18px/22px var(--cjk); color: var(--text); }
+.plan .tr small { font: 400 14px/17px var(--cjk); color: var(--hint); }
+.plan .st { padding-left: 32px; font: 400 14px/17px var(--cjk); width: max-content; }
+.plan hr { margin: 0; border: 0; border-top: 1px solid var(--sep); }
+.plan ol { list-style: none; margin: 0; padding: 0 0 0 2px; display: flex; flex-direction: column; gap: 12px; position: relative; }
+.plan ol::before { content: ""; position: absolute; left: 11px; top: 10px; bottom: 10px; width: 2px; background: var(--sep); }
+.plan li { position: relative; display: flex; align-items: center; gap: 10px; font: 400 16px/20px var(--cjk); color: var(--hint); }
+.plan li svg { flex: none; background: #fff; border-radius: 50%; }
+.plan li.cur { color: var(--text); font-weight: 500; }
+.hint { display: flex; align-items: center; gap: 8px; height: 48px; padding: 4px 16px; border-radius: 12px; font-size: 16px; color: var(--text); flex: none; }
+.hint.sel { background: var(--selected); }
+.hint.quota { background: var(--red1); }
+.hint .sp { flex: 1; }
+.hint .x { width: 28px; height: 28px; border: 0; background: none; padding: 0; border-radius: 50%; cursor: pointer; }
+.hint .x:hover { background: rgba(0,0,0,.06); }
+.content .hint { width: 432px; align-self: flex-start; }
+
+.cmp { position: relative; width: 432px; border-radius: 16px; padding: 12px 8px 8px 16px; display: flex; flex-direction: column; gap: 4px; background: linear-gradient(#fff,#fff) padding-box, linear-gradient(90deg,#9b70ff 0%,#0ba798 50%,#2096ff 100%) border-box; border: 2px solid transparent; }
+.cmp.dis { background: #fff; border: 1px solid rgba(151,151,151,.5); padding: 13px 9px 9px 17px; }
+.line { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 6px; padding-right: 8px; max-height: 114px; overflow-y: auto; scrollbar-width: thin; }
+.tok { font: 500 18px/22px var(--latin); color: var(--primary); border-radius: 4px; padding: 0 2px; margin-left: -2px; }
+.tok.sel { background: var(--selected); }
+.param { font: 400 18px/22px var(--latin); color: var(--hint); }
+textarea { flex: 1 1 140px; min-width: 0; border: 0; outline: 0; resize: none; padding: 0; margin: 0; background: transparent; font: 400 18px/22.8px var(--cjk); color: var(--text); overflow: hidden; }
+textarea::placeholder { color: var(--hint); }
+textarea:disabled::placeholder { color: var(--disabled); }
+.arow { display: flex; align-items: center; gap: 8px; height: 48px; }
+.arow .sp { flex: 1; }
+.chip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 12px; border-radius: 9999px; background: var(--subtle); border: 0; font: 400 16px/19px var(--cjk); color: var(--text); cursor: pointer; }
+.chip b { font-weight: 500; }
+.cmp.dis .chip { color: var(--disabled); cursor: default; }
+.round { width: 48px; height: 48px; border: 0; padding: 0; background: none; border-radius: 50%; cursor: pointer; display: block; }
+.round svg { display: block; }
+.round:disabled { cursor: default; }
+.menu { position: absolute; left: 0; bottom: calc(100% + 16px); width: 432px; height: 380px; background: #fff; border-radius: 16px; box-shadow: 0 4px 16px rgba(0,0,0,.18); padding: 16px 0; display: flex; flex-direction: column; gap: 8px; }
+.menu.short { height: auto; }
+.menu .mh { padding-left: 24px; font: 400 16px/19px var(--cjk); color: var(--hint); }
+.menu .ml { overflow-y: auto; scrollbar-width: thin; }
+.mi { width: 100%; height: 71px; padding: 0 32px; border: 0; background: none; text-align: left; display: flex; flex-direction: column; justify-content: center; gap: 4px; cursor: pointer; }
+.mi:hover, .mi.on { background: var(--hover); }
+.mi b { font: 400 18px/21px var(--latin); color: var(--text); }
+.mi small { font: 400 18px/21px var(--cjk); color: var(--supporting); }
+.dd { position: absolute; background: #fff; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,.18); padding: 8px 0; z-index: 3; }
+.dd button { display: block; width: 100%; border: 0; background: none; text-align: left; padding: 10px 20px; font: 400 18px/22px var(--cjk); color: var(--text); cursor: pointer; }
+.dd button:hover { background: var(--hover); }
+.dd .q { padding: 10px 20px; font: 400 18px/22px var(--cjk); color: var(--text); }
+.dd .q small { display: block; font-size: 14px; line-height: 17px; color: var(--hint); }
+.dd .q small.warn { color: var(--red); }
+.dd .del { color: var(--red); }
+.glabel { font: 400 14px/17px var(--cjk); color: var(--hint); padding: 8px 0 8px 20px; }
+.hi { position: relative; width: 448px; height: 56px; display: flex; align-items: center; padding: 0 24px; border-radius: 8px; font: 400 18px/21px var(--cjk); color: var(--text); cursor: pointer; }
+.hi:hover, .hi.hov { background: var(--list-hover); }
+.hi span { flex: 1; }
+.hi .ib { width: 32px; height: 32px; }
+.empty { margin: auto; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+.empty b { font: 500 18px/22px var(--cjk); color: var(--text); margin-top: 8px; }
+.empty small { font: 400 14px/17px var(--cjk); color: var(--hint); margin-bottom: 8px; }
+.scrolldown { position: absolute; left: 216px; width: 68px; height: 68px; border: 0; padding: 0; background: none; cursor: pointer; }
+
+.tabs { display: flex; gap: 4px; background: color-mix(in srgb, var(--ink) 6%, transparent); border-radius: 999px; padding: 3px; }
+.tabs button { flex: 1; font: inherit; font-size: .82rem; border: 0; background: transparent; color: var(--ink-soft); border-radius: 999px; padding: 6px; cursor: pointer; }
+.tabs button[aria-pressed="true"] { background: var(--panel); color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+.nav[hidden] { display: none; }
+.flow { border-radius: 10px; }
+.flow.on { background: color-mix(in srgb, var(--accent) 9%, transparent); box-shadow: inset 3px 0 0 var(--accent); padding-bottom: 10px; }
+.list .flow .ft { display: grid; grid-template-columns: 1fr; gap: 2px; width: 100%; padding: 8px 10px; }
+.list .flow .ft b { font-size: .86rem; font-weight: 500; }
+.list .flow .ft .ref { font-size: .72rem; color: var(--ink-soft); }
+.list .flow .ft[aria-current="true"] { background: transparent; box-shadow: none; }
+.how { margin: 0 10px 8px; font-size: .78rem; line-height: 1.55; color: var(--ink); }
+.vars { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 10px 8px; }
+.list .vars button { display: inline-block; font-size: .74rem; padding: 4px 10px; border: 1px solid var(--rule); border-radius: 999px; background: var(--panel); }
+.list .vars button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.list .again { display: inline-block; margin-left: 6px; font-size: .74rem; color: var(--accent); padding: 2px 4px; }
+.rst { justify-self: start; font: inherit; font-size: .78rem; border: 1px solid var(--rule); background: transparent; color: var(--ink); border-radius: 999px; padding: 5px 12px; cursor: pointer; }
+.side .sec { padding: 6px 8px 12px; border-bottom: 1px solid var(--rule); }
+.side .sec:last-child { border-bottom: 0; }
+.side .sec h4 { margin: 6px 0 8px; font-size: .8rem; font-weight: 500; color: var(--ink); display: flex; flex-direction: column; gap: 2px; }
+.side .sec h4 small { font-weight: 400; color: var(--ink-soft); font-size: .72rem; }
+.side .sec p { margin: 0 0 8px; font-size: .76rem; color: var(--ink-soft); }
+.side .sec p b { color: var(--accent); font-weight: 500; }
+.chips, .tries { display: flex; flex-wrap: wrap; gap: 4px; }
+.list .chips button, .list .tries button { display: inline-block; font-size: .74rem; line-height: 1.3; padding: 5px 10px; border: 1px solid var(--rule); border-radius: 999px; background: var(--panel); color: var(--ink); cursor: pointer; text-align: left; }
+.list .chips button:hover, .list .tries button:hover { border-color: var(--accent); }
+.list .chips button[aria-pressed="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+.side .sec p.note { color: var(--ink); line-height: 1.55; }
+.tg { font-size: .72rem; color: var(--ink-soft); margin: 8px 0 4px; }
+/* 情境清單 */
+.side { background: var(--panel); border: 1px solid var(--rule); border-radius: 12px; display: flex; flex-direction: column; max-height: calc(100vh - 40px); position: sticky; top: 20px; }
+.side .sh { padding: 14px 16px 10px; border-bottom: 1px solid var(--rule); display: grid; gap: 8px; }
+.side .sh b { font-size: .95rem; }
+.side .sh small { font-size: .76rem; color: var(--ink-soft); line-height: 1.5; }
+.nav { display: flex; gap: 6px; }
+.nav button { flex: 1; font: inherit; font-size: .8rem; border: 1px solid var(--rule); background: transparent; color: var(--ink); border-radius: 8px; padding: 6px; cursor: pointer; }
+.list { overflow-y: auto; padding: 8px; display: grid; gap: 2px; }
+.list h4 { margin: 10px 8px 4px; font-size: .78rem; color: var(--ink-soft); font-weight: 500; }
+.list button { text-align: left; font: inherit; font-size: .8rem; line-height: 1.35; border: 0; background: transparent; color: var(--ink); border-radius: 8px; padding: 6px 8px; cursor: pointer; display: grid; grid-template-columns: 48px 1fr; gap: 4px; }
+.list button span { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.list button:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.list button[aria-current="true"] { background: color-mix(in srgb, var(--accent) 18%, transparent); box-shadow: inset 3px 0 0 var(--accent); }
+.list button.flag::after { content: "原型補"; grid-column: 2; font-size: .68rem; color: #b45309; }
+@media (prefers-reduced-motion: reduce) { .spark, .shimmer, .cursor { animation-duration: 4s; } }
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div>
+      <h1>EZWrite6 AI Agent 精稿原型</h1>
+      <p>直接在 AI 視窗裡操作：輸入「/」用 Skill、點建議卡、回覆快速選項。畫布和對話會延續，復原會退回上一步畫布，開新對話會存進對話紀錄。右側可切換畫布內容、點數、網路狀態來看不同反應。畫布為 Figma 匯出底圖，AI 視窗照 Figma 尺寸重刻。</p>
+    </div>
+    <div class="tools"><button type="button" id="fs">全螢幕</button></div>
+  </div>
+  <div>
+    <div class="outer" id="outer"><div class="stage" id="stage">
+      <img class="bg" id="bg" alt="" src="img/base.jpg"><img class="bg" id="bg2" alt="" style="opacity:0"><div class="sweep" id="sweep" hidden></div>
+      <button class="ai-hot" id="aiHot" type="button" aria-label="開關 AI 視窗"></button>
+      <section class="win" id="win" aria-label="EZWrite6 Agent"></section>
+      <div id="layer"></div>
+    </div></div>
+  </div>
+  <aside class="side" aria-label="環境與試試看">
+    <div class="sh"><b>原型控制</b><small>畫面照邏輯延續：下一個指令看的是「現在畫布上有什麼」。切換下面的開關不會清掉對話。</small><button type="button" id="reset" class="rst">重設全部</button></div>
+    <div class="list" id="panel"></div>
+  </aside>
+</div>
+
+<script>
+(() => {
+const $ = id => document.getElementById(id);
+const stage = $('stage'), outer = $('outer'), win = $('win'), bgEl = $('bg'), layer = $('layer');
+['base','court','sel','brainLock','math','sci','chi','eng','quiz','team','brainDone','groupDone','groupTeam','stickies','split','attBefore','attLock','attStay','attDone','clsStay','bulkBefore','bulkLock','bulkLocked','clsBefore','stickLock','clsDone','cls2','gramBefore','gramLock','gramDone','sumDone'].forEach(k => { new Image().src = `img/${k}.jpg`; });
+const LOCKS = { brainLock: [676,136,968,594], attLock: [536,96,1293,720], bulkLock: [796,236,730,492], stickLock: [796,236,730,492], gramLock: [736,336,948,106] };
+const fit = () => { stage.style.transform = `scale(${outer.clientWidth / 1920})`; };
+new ResizeObserver(fit).observe(outer); fit();
+$('fs').onclick = () => { document.fullscreenElement ? document.exitFullscreen() : outer.requestFullscreen?.(); };
+
+/* ---------- Figma 匯出的 icon ---------- */
+const IC = {
+  more: '<svg width="32" height="32" viewBox="0 0 32 32"><circle cx="6.5" cy="16.5" r="2.5" fill="#595959"/><circle cx="16.5" cy="16.5" r="2.5" fill="#595959"/><circle cx="26.5" cy="16.5" r="2.5" fill="#595959"/></svg>',
+  close: '<svg width="40" height="40" viewBox="0 0 40 40" fill="none"><path d="M9.35 9.35L30.57 30.57M9.35 30.57L30.57 9.35" stroke="#595959" stroke-width="2.5" stroke-linecap="round"/></svg>',
+  back: '<svg width="40" height="40" viewBox="0 0 40 40" fill="none"><path d="M17.26 29.43L8.78 20.94L17.26 12.46M8.78 20.94H32.02" stroke="#595959" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  mic: (dis) => `<svg width="48" height="48" viewBox="0 0 48 48" fill="none"><circle cx="24" cy="24" r="24" fill="${dis ? '#cdcdcd' : '#fff'}"/><path d="M24 31V37" stroke="${dis ? '#fff' : '#595959'}" stroke-width="1.6" stroke-linecap="round"/><path d="M16 25C16 28.31 19.58 31 24 31C28.42 31 32 28.31 32 25" stroke="${dis ? '#fff' : '#595959'}" stroke-width="1.6" stroke-linecap="round"/><rect x="20" y="11" width="8" height="16" rx="4" stroke="${dis ? '#fff' : '#595959'}" stroke-width="1.6"/></svg>`,
+  send: (c) => `<svg width="48" height="48" viewBox="0 0 48 48"><circle cx="24" cy="24" r="24" fill="${c}"/><path d="M33.78 23.37C34.1 23.76 34.07 24.34 33.71 24.71L26.71 31.71C26.32 32.1 25.68 32.1 25.29 31.71C24.9 31.32 24.9 30.68 25.29 30.29L31.59 24L25.29 17.71C24.9 17.32 24.9 16.68 25.29 16.29C25.68 15.9 26.32 15.9 26.71 16.29L33.71 23.29Z" fill="#fff"/><path d="M15 23H33C33.55 23 34 23.45 34 24C34 24.55 33.55 25 33 25H15C14.45 25 14 24.55 14 24C14 23.45 14.45 23 15 23Z" fill="#fff"/></svg>`,
+  stop: '<svg width="48" height="48" viewBox="0 0 48 48"><circle cx="24" cy="24" r="24" fill="#4a6ee4"/><rect x="16.5" y="16.5" width="15" height="15" rx="2.5" fill="#fff"/></svg>',
+  ai: '<svg width="64" height="64" viewBox="0 0 46 46" fill="none"><defs><linearGradient id="aig" x1="8.5" y1="3" x2="36" y2="47.5" gradientUnits="userSpaceOnUse"><stop stop-color="#713DFF"/><stop offset="1" stop-color="#9B70FF"/></linearGradient></defs><circle cx="23" cy="23" r="21.5" fill="url(#aig)"/><path fill-rule="evenodd" d="M29.25 12.25C29.58 12.25 29.86 12.46 29.96 12.76L30.78 15.22L33.24 16.04C33.55 16.14 33.75 16.43 33.75 16.75C33.75 17.07 33.55 17.36 33.24 17.46L30.78 18.28L29.96 20.74C29.86 21.04 29.58 21.25 29.25 21.25C28.93 21.25 28.64 21.04 28.54 20.74L27.72 18.28L25.27 17.46C24.96 17.36 24.75 17.07 24.75 16.75C24.75 16.43 24.96 16.14 25.27 16.04L27.72 15.22L28.54 12.76C28.64 12.46 28.93 12.25 29.25 12.25Z" fill="#fff"/><path d="M29.25 23C29.94 23 30.5 23.56 30.5 24.25V30.5C30.5 31.19 29.94 31.75 29.25 31.75C28.56 31.75 28 31.19 28 30.5V24.25C28 23.56 28.56 23 29.25 23Z" fill="#fff"/><path d="M16.94 16.41C17.09 15.87 17.58 15.5 18.14 15.5H20.36C20.92 15.5 21.41 15.87 21.57 16.41L25.46 30.16C25.64 30.82 25.26 31.51 24.59 31.7C23.93 31.89 23.24 31.5 23.05 30.84L19.42 18H19.09L15.46 30.84C15.27 31.5 14.58 31.89 13.91 31.7C13.25 31.51 12.86 30.82 13.05 30.16L16.94 16.41Z" fill="#fff"/><path d="M14.25 26.75C14.25 26.06 14.81 25.5 15.5 25.5H23C23.69 25.5 24.25 26.06 24.25 26.75C24.25 27.44 23.69 28 23 28H15.5C14.81 28 14.25 27.44 14.25 26.75Z" fill="#fff"/></svg>',
+  spark: '<svg class="spark" width="24" height="24" viewBox="0 0 24 24"><path d="M12 3C12.9 3 13.1 4.2 13.4 5.6C14.1 8.8 15.2 9.9 18.4 10.6C19.8 10.9 21 11.1 21 12C21 12.9 19.8 13.1 18.4 13.4C15.2 14.1 14.1 15.2 13.4 18.4C13.1 19.8 12.9 21 12 21C11.1 21 10.9 19.8 10.6 18.4C9.9 15.2 8.8 14.1 5.6 13.4C4.2 13.1 3 12.9 3 12C3 11.1 4.2 10.9 5.6 10.6C8.8 9.9 9.9 8.8 10.6 5.6C10.9 4.2 11.1 3 12 3Z" fill="#713DFF"/></svg>',
+  arrowR: '<svg width="24" height="24" viewBox="0 0 32 32"><path d="M25.78 15.37C26.1 15.76 26.07 16.34 25.71 16.71L18.71 23.71C18.32 24.1 17.68 24.1 17.29 23.71C16.9 23.32 16.9 22.68 17.29 22.29L23.59 16L17.29 9.71C16.9 9.32 16.9 8.68 17.29 8.29C17.68 7.9 18.32 7.9 18.71 8.29L25.71 15.29Z" fill="#595959"/><path d="M7 15H25C25.55 15 26 15.45 26 16C26 16.55 25.55 17 25 17H7C6.45 17 6 16.55 6 16C6 15.45 6.45 15 7 15Z" fill="#595959"/></svg>',
+  dropDown: '<svg width="32" height="32" viewBox="0 0 32 32"><path d="M16 19.6L22 13.6H10Z" fill="#595959"/></svg>',
+  dropUp: '<svg width="32" height="32" viewBox="0 0 32 32"><path d="M16 12.4L22 18.4H10Z" fill="#595959"/></svg>',
+  err: '<svg width="30" height="30" viewBox="0 0 30 30"><path d="M26 15C26 8.92 21.08 4 15 4C8.92 4 4 8.92 4 15C4 21.08 8.92 26 15 26C21.08 26 26 21.08 26 15ZM28 15C28 22.18 22.18 28 15 28C7.82 28 2 22.18 2 15C2 7.82 7.82 2 15 2C22.18 2 28 7.82 28 15Z" fill="#D71A09"/><path d="M17 21C17 22.1 16.1 23 15 23C13.9 23 13 22.1 13 21C13 19.9 13.9 19 15 19C16.1 19 17 19.9 17 21Z" fill="#D71A09"/><path d="M13 16V8C13 6.9 13.9 6 15 6C16.1 6 17 6.9 17 8V16C17 17.1 16.1 18 15 18C13.9 18 13 17.1 13 16Z" fill="#D71A09"/></svg>',
+  chkOff: '<svg width="30" height="30" viewBox="0 0 30 30"><path d="M3 5C3 3.9 3.9 3 5 3H25C26.1 3 27 3.9 27 5V25C27 26.1 26.1 27 25 27H5C3.9 27 3 26.1 3 25V5Z" fill="#fff" stroke="#595959" stroke-width="1.5"/></svg>',
+  chkOn: '<svg width="30" height="30" viewBox="0 0 30 30"><path d="M3 5C3 3.9 3.9 3 5 3H25C26.1 3 27 3.9 27 5V25C27 26.1 26.1 27 25 27H5C3.9 27 3 26.1 3 25V5Z" fill="#4A6EE4" stroke="#4A6EE4" stroke-width="1.5"/><path d="M8.13 14.45C8.44 14.14 8.95 14.14 9.26 14.45L12.66 17.84L20.58 9.92C20.89 9.61 21.4 9.61 21.71 9.92L22.27 10.49C22.59 10.8 22.59 11.31 22.27 11.62L13.22 20.67C12.91 20.98 12.4 20.98 12.09 20.67L7.57 16.15C7.25 15.83 7.25 15.33 7.57 15.01Z" fill="#fff"/></svg>',
+  chkMid: '<svg width="30" height="30" viewBox="0 0 30 30"><path d="M3 5C3 3.9 3.9 3 5 3H25C26.1 3 27 3.9 27 5V25C27 26.1 26.1 27 25 27H5C3.9 27 3 26.1 3 25V5Z" fill="#4A6EE4" stroke="#4A6EE4" stroke-width="1.5"/><rect x="8" y="14" width="14" height="2.4" rx="1.2" fill="#fff"/></svg>',
+  stepDone: '<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M4 10.5L8 14.5L16 6" stroke="#713DFF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  stepCur: '<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="7.25" stroke="#713DFF" stroke-width="1.5"/><circle cx="10" cy="10" r="3" fill="#713DFF"/></svg>',
+  stepTodo: '<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="7.25" stroke="#8F9090" stroke-width="1.5"/></svg>',
+  selIcon: '<svg width="28" height="28" viewBox="0 0 28 28"><path d="M17.5 12.42C19.82 12.42 21.7 14.31 21.7 16.62C21.7 18.94 19.82 20.82 17.5 20.82C15.37 20.82 13.62 19.25 13.34 17.2H14.76C15.02 18.47 16.15 19.42 17.5 19.42C19.04 19.42 20.3 18.17 20.3 16.62C20.3 15.13 19.13 13.91 17.66 13.83L17.5 13.82Z" fill="#595959"/><path d="M17.02 9.8C17.35 9.8 17.63 10.05 17.67 10.37L17.67 10.46V17.02C17.67 17.35 17.42 17.63 17.1 17.67L17.02 17.67H10.46C10.12 17.67 9.84 17.42 9.8 17.1L9.8 17.02V13.52L11.11 13.47V16.36H16.36V11.11H11.98L11.1 9.8Z" fill="#595959"/><path d="M24.5 2.78C24.91 2.78 25.24 3.1 25.24 3.5V24.5C25.24 24.9 24.91 25.22 24.5 25.22H3.5C3.09 25.22 2.75 24.9 2.75 24.5V3.5C2.75 3.1 3.09 2.78 3.5 2.78ZM4.24 23.78H23.75V4.22H4.24Z" fill="#595959"/><rect x=".88" y=".88" width="4.2" height="4.2" rx="1.4" fill="#595959"/><rect x=".88" y="22.75" width="4.2" height="4.2" rx="1.4" fill="#595959"/><rect x="22.75" y=".88" width="4.2" height="4.2" rx="1.4" fill="#595959"/><rect x="22.75" y="22.75" width="4.2" height="4.2" rx="1.4" fill="#595959"/><path d="M9.62 6.28C9.9 6.28 10.15 6.42 10.28 6.65L13.78 12.78C13.9 13 13.9 13.27 13.77 13.49C13.63 13.71 13.39 13.85 13.12 13.85H6.12C5.86 13.85 5.61 13.71 5.48 13.49C5.35 13.27 5.34 13 5.47 12.78L8.97 6.65C9.1 6.42 9.35 6.28 9.62 6.28ZM7.39 12.4H11.86L9.62 8.49Z" fill="#595959"/></svg>',
+  x28: '<svg width="28" height="28" viewBox="0 0 28 28"><path d="M5.66 5.66C5.94 5.39 6.38 5.39 6.65 5.66L22.1 21.11C22.37 21.38 22.37 21.82 22.1 22.1C21.82 22.37 21.38 22.37 21.11 22.1L5.66 6.65C5.39 6.38 5.39 5.94 5.66 5.66Z" fill="#595959"/><path d="M5.66 22.1C5.39 21.82 5.39 21.38 5.66 21.11L21.11 5.66C21.38 5.39 21.82 5.39 22.1 5.66C22.37 5.94 22.37 6.38 22.1 6.65L6.65 22.1C6.38 22.37 5.94 22.37 5.66 22.1Z" fill="#595959"/></svg>',
+  scroll: '<svg width="68" height="68" viewBox="0 0 68 68"><defs><filter id="sdf" x="0" y="0" width="68" height="68" filterUnits="userSpaceOnUse"><feOffset dy="5"/><feGaussianBlur stdDeviation="5"/><feColorMatrix values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.1 0"/><feBlend in="SourceGraphic"/></filter></defs><g filter="url(#sdf)"><circle cx="34" cy="29" r="24" fill="#fff"/><path d="M34 34.6L42 26.6H26Z" fill="#595959"/></g></svg>',
+  empty: '<svg width="128" height="128" viewBox="0 0 128 128" fill="none"><path d="M26 22H74C80.6 22 86 27.4 86 34V60C86 66.6 80.6 72 74 72H38L24 84V71.4C18.4 70.4 14 65.6 14 60V34C14 27.4 19.4 22 26 22Z" fill="#fff" stroke="#E5E5E5" stroke-width="3.5" stroke-linejoin="round"/><path d="M52 46H102C108.6 46 114 51.4 114 58V88C114 94.6 109.6 99.4 104 100.4V112L90 100H52C45.4 100 40 94.6 40 88V58C40 51.4 45.4 46 52 46Z" fill="#fff" stroke="#E5E5E5" stroke-width="3.5" stroke-linejoin="round"/><path d="M54 64H100M54 74H94M54 84H78" stroke="#E5E5E5" stroke-width="3.5" stroke-linecap="round"/><path d="M104 11C104.9 11 105.1 12.2 105.4 13.6C106.1 16.8 107.2 17.9 110.4 18.6C111.8 18.9 113 19.1 113 20C113 20.9 111.8 21.1 110.4 21.4C107.2 22.1 106.1 23.2 105.4 26.4C105.1 27.8 104.9 29 104 29C103.1 29 102.9 27.8 102.6 26.4C101.9 23.2 100.8 22.1 97.6 21.4C96.2 21.1 95 20.9 95 20C95 19.1 96.2 18.9 97.6 18.6C100.8 17.9 101.9 16.8 102.6 13.6C102.9 12.2 103.1 11 104 11Z" fill="#E5E5E5"/></svg>',
+  sug: [
+    '<svg width="48" height="48" viewBox="0 0 48 48"><rect width="48" height="48" rx="8" fill="#EFE8FF"/><path d="M12.8 16.33C12.8 15.68 12.8 15.27 12.84 14.98C12.88 14.7 12.93 14.64 12.96 14.62C12.98 14.6 13.04 14.55 13.31 14.51C13.61 14.47 14.02 14.47 14.67 14.47H16C17.91 14.47 19.26 14.47 20.28 14.61C21.28 14.74 21.85 14.99 22.26 15.4C22.68 15.82 22.93 16.38 23.06 17.38C23.2 18.41 23.2 19.76 23.2 21.67V31.96C22.38 31.23 21.3 30.77 20.12 30.74H14.67C14.02 30.74 13.61 30.74 13.31 30.7C13.04 30.66 12.98 30.61 12.96 30.59C12.93 30.56 12.88 30.51 12.84 30.23C12.8 29.93 12.8 29.53 12.8 28.87ZM11.2 28.87C11.2 29.48 11.2 30.02 11.26 30.44C11.32 30.9 11.46 31.35 11.83 31.72C12.19 32.08 12.65 32.22 13.1 32.29C13.53 32.34 14.06 32.34 14.67 32.34H19.88C21.78 32.38 23.16 33.76 23.2 35.67H24.8V21.67C24.8 19.8 24.8 18.33 24.65 17.17C24.49 15.99 24.15 15.03 23.39 14.27C22.64 13.51 21.67 13.18 20.5 13.02C19.34 12.86 17.86 12.87 16 12.87H14.67C14.06 12.87 13.53 12.86 13.1 12.92C12.65 12.98 12.19 13.12 11.83 13.49C11.46 13.86 11.32 14.31 11.26 14.76C11.2 15.19 11.2 15.73 11.2 16.33Z" fill="#713DFF"/><path d="M35.2 16.33C35.2 15.68 35.2 15.27 35.16 14.98C35.12 14.7 35.07 14.64 35.04 14.62C35.02 14.6 34.96 14.55 34.69 14.51C34.39 14.47 33.98 14.47 33.33 14.47H32C30.09 14.47 28.74 14.47 27.72 14.61C26.72 14.74 26.15 14.99 25.74 15.4C25.32 15.82 25.07 16.38 24.94 17.38C24.8 18.41 24.8 19.76 24.8 21.67V31.96C25.62 31.23 26.7 30.77 27.88 30.74H33.33C33.98 30.74 34.39 30.74 34.69 30.7C34.96 30.66 35.02 30.61 35.04 30.59C35.07 30.56 35.12 30.51 35.16 30.23C35.2 29.93 35.2 29.53 35.2 28.87ZM36.8 28.87C36.8 29.48 36.8 30.02 36.74 30.44C36.68 30.9 36.54 31.35 36.17 31.72C35.81 32.08 35.35 32.22 34.9 32.29C34.47 32.34 33.94 32.34 33.33 32.34H28.13C26.22 32.38 24.84 33.76 24.8 35.67H23.2V21.67C23.2 19.8 23.2 18.33 23.35 17.17C23.51 15.99 23.85 15.03 24.61 14.27C25.36 13.51 26.33 13.18 27.5 13.02C28.66 12.86 30.14 12.87 32 12.87H33.33C33.94 12.87 34.47 12.86 34.9 12.92C35.35 12.98 35.81 13.12 36.17 13.49C36.54 13.86 36.68 14.31 36.74 14.76C36.8 15.19 36.8 15.73 36.8 16.33Z" fill="#713DFF"/><path d="M27 26.2H33A.8.8 0 0 1 33 27.8H27A.8.8 0 0 1 27 26.2ZM27 22.2H33A.8.8 0 0 1 33 23.8H27A.8.8 0 0 1 27 22.2ZM27 18.2H33A.8.8 0 0 1 33 19.8H27A.8.8 0 0 1 27 18.2Z" fill="#713DFF"/></svg>',
+    '<svg width="48" height="48" viewBox="0 0 48 48"><rect width="48" height="48" rx="8" fill="#EFE8FF"/><path d="M30.63 11.62C31 11.66 31.31 11.84 31.56 12.03C31.83 12.24 32.13 12.53 32.44 12.85L35.15 15.56C35.47 15.88 35.77 16.17 35.97 16.44C36.19 16.73 36.39 17.09 36.39 17.54C36.39 17.99 36.19 18.35 35.97 18.64C35.77 18.91 35.47 19.2 35.15 19.52L20.34 34.33C20.18 34.49 20 34.68 19.76 34.82C19.53 34.95 19.27 35.01 19.04 35.06L15.43 35.97C14.73 36.14 14.12 36.3 13.64 36.34C13.14 36.39 12.56 36.35 12.1 35.9C11.65 35.44 11.61 34.86 11.66 34.36C11.71 33.88 11.86 33.27 12.03 32.57L12.94 28.96C12.99 28.73 13.05 28.47 13.18 28.24C13.32 28.01 13.51 27.82 13.67 27.66L28.48 12.85C28.8 12.53 29.09 12.24 29.37 12.03C29.65 11.81 30.01 11.62 30.46 11.62ZM30.46 13.22C30.44 13.23 30.4 13.25 30.34 13.3C30.17 13.43 29.96 13.63 29.61 13.98L14.81 28.79C14.7 28.89 14.65 28.95 14.61 28.99L14.56 29.07L14.49 29.35L13.59 32.96C13.4 33.71 13.28 34.18 13.25 34.52L13.25 34.75L13.48 34.75C13.82 34.72 14.29 34.6 15.04 34.42L18.65 33.51L18.93 33.44L19.01 33.39L19.21 33.2L34.02 18.39C34.37 18.04 34.57 17.83 34.7 17.67L34.78 17.54L34.7 17.41C34.57 17.25 34.37 17.04 34.02 16.69L31.31 13.98C30.96 13.63 30.76 13.43 30.59 13.3Z" fill="#713DFF"/><path d="M32.07 21.18L30.93 22.32L25.68 17.07L26.82 15.93Z" fill="#713DFF"/></svg>',
+    '<svg width="48" height="48" viewBox="0 0 48 48"><rect width="48" height="48" rx="8" fill="#EFE8FF"/><path d="M28.92 14.2C28.92 14.86 28.69 15.47 28.31 15.97C28.09 16.26 27.98 16.48 27.96 16.65C30.41 16.5 32.82 16.21 35.18 15.79C35.4 15.75 35.62 15.8 35.79 15.93C35.97 16.06 36.09 16.25 36.11 16.47C36.4 18.75 36.56 21.07 36.59 23.42C36.61 24.35 35.86 25.08 34.95 25.08C34.22 25.08 33.63 24.71 33.24 24.41C32.99 24.22 32.72 24.12 32.44 24.12C31.69 24.12 30.84 24.91 30.84 26.2C30.84 27.5 31.69 28.29 32.44 28.29C32.72 28.29 32.99 28.19 33.24 28C33.63 27.7 34.22 27.33 34.95 27.33C35.81 27.37 36.49 28.1 36.43 28.91C36.28 30.98 36.03 33.02 35.68 35.03C35.62 35.36 35.36 35.62 35.02 35.68C32.72 36.08 30.37 36.36 27.99 36.5C27.1 36.55 26.36 35.84 26.36 34.96C26.36 34.23 26.74 33.64 27.04 33.25C27.22 33 27.32 32.73 27.32 32.45C27.32 31.69 26.53 30.85 25.24 30.85C23.95 30.85 23.16 31.69 23.16 32.45C23.16 32.73 23.26 33 23.44 33.25C23.74 33.64 24.12 34.23 24.12 34.96C24.12 35.86 23.38 36.61 22.46 36.58C20.43 36.52 18.44 36.37 16.47 36.12C16.25 36.09 16.05 35.98 15.92 35.8C15.79 35.62 15.74 35.4 15.78 35.19C16.15 33.14 16.42 31.05 16.58 28.94C16.42 28.98 16.23 29.08 15.97 29.28C15.47 29.65 14.86 29.88 14.2 29.88C12.3 29.88 11 28.09 11 26.2C11 24.31 12.3 22.52 14.2 22.52C14.86 22.52 15.47 22.76 15.97 23.13C16.3 23.39 16.53 23.48 16.71 23.48C16.74 23.47 16.75 23.45 16.75 23.45C16.73 21.35 16.59 19.28 16.36 17.24C16.33 17 16.41 16.76 16.58 16.59C16.76 16.41 17 16.33 17.24 16.36C18.97 16.56 20.73 16.68 22.5 16.74C22.51 16.73 22.52 16.72 22.52 16.71C22.52 16.53 22.42 16.3 22.17 15.97C21.79 15.47 21.56 14.86 21.56 14.2C21.56 12.3 23.35 11 25.24 11C27.13 11 28.92 12.3 28.92 14.2Z" fill="none" stroke="#713DFF" stroke-width="1.5"/></svg>'
+  ]
+};
+
+/* ---------- 內容資料（照 Figma 文字） ---------- */
+const SKILLS = [['/attachment','彙整畫布上的外部連結'],['/bulk-edit','依條件批次修改物件屬性'],['/classify','便利貼分群，複製後依語意排列'],['/grammar-check','找出錯字與文法問題'],['/group','依組數建立色塊分區'],['/summarize','歸納選取或內容的重點']];
+const PARAM = { '/group': '請輸入組數（2–8）' };
+const SUGS = [['課堂講解','依課程開啟需要的小工具'],['腦力激盪','建立主題空白便利貼'],['小組討論','分組建立討論區與記分板']];
+const HIST = [['今天',['檢查錯別字','換成籃球場背景']],['較早',['便利貼分群','課程總結報告','校慶腦力激盪','小組討論分組']]];
+const GROUPS = ['2 組','3 組','4 組','5 組','6 組','7 組','8 組'];
+const COURSES = ['數學','自然科學','國語文','英文課','測驗','小組活動'];
+const TOOLS = {
+  '數學': ['幾何工具組（尺、量角器、圓規、三角板）','計算機組','單位換算','手寫數學公式','卷軸畫布'],
+  '自然科學': ['計算機組','單位換算','倒數計時器','碼表'],
+  '國語文': ['倒數計時器','抽籤'], '英文課': ['抽籤','轉盤'], '測驗': ['倒數計時器','記分板'],
+  '小組活動': ['倒數計時器','碼表','記分板','抽籤','轉盤','分割畫布'] };
+const COURSE_DONE = {
+  '數學': ['math','已開啟 5 個數學課小工具，可縮小的工具已收到畫面右側。'], '自然科學': ['sci','已開啟 4 個自然科學課小工具，可縮小的工具已收到畫面右側。'],
+  '國語文': ['chi','已開啟 2 個國語文課小工具，已收到畫面右側。'], '英文課': ['eng','已開啟 2 個英文課小工具。'],
+  '測驗': ['quiz','已開啟 2 個測驗小工具；記分板需先選擇隊伍，停在選擇畫面。'], '小組活動': ['team','已開啟 5 個小組活動小工具；記分板需先選擇隊伍，停在選擇畫面。'] };
+const COURSE_USER = {};
+const TYPO2 = ['智慧造 → 照明全系列新品','可條是 → 調式後背光功能'];
+const TYPO5 = ['揮煌 → 輝煌','鍥成 → 砌成','古積 → 古蹟','灰盡 → 灰燼','不盛 → 不勝'];
+const SUM1 = '1 加到 10 的總和是 55。\n公式：(首項 + 末項) × 項數 ÷ 2\n(1 + 10) × 10 ÷ 2 = 55';
+const LONG = '這頁便利貼可以歸納成三個重點：\n\n一、攤位類型以飲食為主：冰品甜點、小吃、茶飲共 3 張，佔一半以上。\n\n二、遊戲類攤位有套圈圈、棒球九宮格，需要較大的場地，建議安排在操場邊。\n\n三、手工餅乾需要事先製作，建議提早分工並確認食品安全規範。\n\n另外，建議每組在攤位旁準備價目表與找零，並在活動前一天彩排動線。';
+const PYTH = '畢氏定理（又稱勾股定理）是指在平面上的直角三角形中，兩條短邊（直角邊，稱為股）的長度平方相加，會等於最長邊（斜邊）的長度平方。\n\n基本公式\n若直角三角形的兩股長度分別為 a 和 b，斜邊長度為 c，則公式為：a² + b² = c²\n\n常見例子\n3、4、5 是最常見的一組：3² + 4² = 9 + 16 = 25 = 5²。另外 5、12、13 與 8、15、17 也都符合這個關係。\n\n課堂應用\n可以請學生在方格紙上畫出直角三角形，量測三邊後代入公式驗證，也能用來計算教室對角線的長度。\n\n延伸思考\n如果三角形不是直角三角形，a² + b² 會比 c² 大還是小？這可以引導到餘弦定理。';
+const COS = '餘弦定理是畢氏定理的推廣，適用於任何三角形：c² = a² + b² − 2ab·cos C。當 C 為 90° 時，cos C = 0，就會回到畢氏定理。';
+const BRAIN_Q = '要討論的主題是什麼？（例如：校慶打扮成什麼、如何減少班級垃圾量）';
+const CONFIRM_T = '所選物件皆已鎖定，請先解除鎖定後再進行修改。是否要將這些物件解除鎖定？';
+const ERRORS = { parse: '解析回應時發生錯誤。', net: '網路連線異常，請確認連線狀態。', halt: '處理時發生問題，任務執行中斷。' };
+const BULK_ERR = [
+  ['動作不支援','/bulk-edit 把文字改成粗體','目前批次修改僅支援「顏色」調整。'],
+  ['物件不支援','/bulk-edit 把圖片改成白色','目前批次修改僅支援「筆跡、文字、便利貼與幾何圖形」的調整。'],
+  ['無符合條件的物件','/bulk-edit 把紅色便利貼改成白色','找不到紅色便利貼，請換個條件試試。'],
+  ['顏色無法辨識','/bulk-edit 把粉紅色便利貼改成彩虹漸層','無法辨識此顏色。基礎顏色支援灰色、白色、藍色、綠色、黃色、橘色、粉紅色、紫色。'],
+  ['指令不完整','/bulk-edit','請輸入「把＿色【物件】改成＿色」。物件支援筆跡、文字、便利貼與幾何圖形。'],
+  ['部分略過','/bulk-edit 把選取物件改成白色','已將 2 個物件更新為白色（已略過 1 個不支援或鎖定的物件）。']];
+
+/* ---------- 狀態 ---------- */
+let S, timers = [];
+const later = (ms, f) => { const t = setTimeout(f, ms); timers.push(t); return t; };
+const clearTimers = () => { timers.forEach(clearTimeout); timers = []; };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const SEED = {
+  '檢查錯別字': [['u','/grammar-check'],['a','檢查發現了 5 個錯別字，需要更正哪些？'],['u','更正 5 項'],['ok','校對完成，共修正 5 處文字。']],
+  '換成籃球場背景': [['u','請換成籃球場背景'],['ok','沒問題，已換成籃球場的背景圖。']],
+  '便利貼分群': [['u','/classify'],['nav','已依語意將便利貼完成分群排列。']],
+  '課程總結報告': [['u','/summarize'],['ok','已完成重點摘要，並新增至畫布。']],
+  '校慶腦力激盪': [['u','腦力激盪'],['a', '要討論的主題是什麼？（例如：校慶打扮成什麼、如何減少班級垃圾量）'],['u','校慶打扮成什麼？'],['ok','已建立腦力激盪主題，並新增 8 張便利貼。']],
+  '小組討論分組': [['u','小組討論'],['a','要建立幾個小組？'],['u','3 組'],['ok','已建立 3 組討論區塊，並開啟記分板。']] };
+const seedHist = () => HIST.map(([g, l]) => [g, l.map(title => ({ title, msgs: SEED[title].map(([t, text]) => ({ t, text, undo: false })) }))]);
+const fresh = () => ({ bg: 'base', winX: 16, open: true, view: 'chat', msgs: [], text: '', skill: null, skillSel: false, busy: false, quota: false, hint: null,
+  menuIdx: 0, more: null, hist: seedHist(), chatRef: null, quotaMode: 'ok', net: 'ok', nextErr: null, histMenu: null, histHover: null, dialog: false, anchor: null, scrollTop: false, await: null });
+
+/* ---------- 視窗渲染 ---------- */
+let render = function () {
+  // 畫布狀態切換：舊圖疊在上層淡出，避免結果瞬間跳出
+  const nextSrc = `img/${S.bg}.jpg`;
+  if (!bgEl.src.endsWith(nextSrc)) {
+    const bg2 = $('bg2');
+    if (S.instant || matchMedia('(prefers-reduced-motion: reduce)').matches) { bg2.style.transition = 'none'; bg2.style.opacity = 0; }
+    else { bg2.style.transition = 'none'; bg2.src = bgEl.src; bg2.style.opacity = 1; requestAnimationFrame(() => requestAnimationFrame(() => { bg2.style.transition = 'opacity .8s ease'; bg2.style.opacity = 0; })); }
+    bgEl.src = nextSrc;
+  }
+  S.instant = false;
+  const L = LOCKS[S.bg], sw = $('sweep');
+  if (L) { Object.assign(sw.style, { left: L[0] + 'px', top: L[1] + 'px', width: L[2] + 'px', height: L[3] + 'px' }); if (sw.hidden) { sw.hidden = false; requestAnimationFrame(() => sw.classList.add('on')); } }
+  else if (!sw.hidden) { sw.classList.remove('on'); sw.hidden = true; }
+  win.hidden = !S.open; $('aiHot').classList.toggle('on', S.open); $('aiHot').setAttribute('aria-pressed', String(S.open)); win.style.left = (S.bg === 'split' ? 112 : 16) + 'px';
+  const content = win.querySelector('.content');
+  const prevTop = content ? content.scrollTop : 0, prevAtBottom = content ? content.scrollHeight - content.scrollTop - content.clientHeight < 8 : true;
+  const focused = document.activeElement && document.activeElement.id === 'ta';
+  const selStart = focused ? document.activeElement.selectionStart : null;
+  let h = '';
+  if (S.view === 'chat') {
+    h += `<div class="head"><button class="ib" type="button" data-act="more" aria-label="更多">${IC.more}</button><h2>EZWrite6 Agent</h2><button class="ib" type="button" data-act="close" aria-label="關閉">${IC.close}</button></div>`;
+    h += `<div class="content" id="content"><div class="col ${S.msgs.length ? (renderHints() ? 'has-hint' : '') : 'welcome-mode'}" id="col">${S.msgs.length ? S.msgs.map((m, i) => m._shown ? renderMsg(m, i) : renderMsg(m, i).replace('class="', 'class="enter ')).join('') : renderWelcome()}<div id="tail"></div></div></div>`;
+    h += renderFoot();
+    if (S.more) h += `<div class="dd" style="left:16px;top:58px;width:200px"><button type="button" data-act="newchat">新對話</button><button type="button" data-act="history">對話紀錄</button><div class="q">AI 點數額度<small>${S.more === 'low' ? '2,400' : '3,000'} / 15,000 點可用</small>${S.more === 'low' ? '<small class="warn">點數即將用完</small>' : ''}</div></div>`;
+  } else {
+    h += `<div class="head"><button class="ib" type="button" data-act="back" aria-label="返回">${IC.back}</button><h2 class="cjk">對話紀錄</h2><button class="ib" type="button" data-act="close" aria-label="關閉">${IC.close}</button></div>`;
+    const any = S.hist.some(([, l]) => l.length);
+    h += `<div class="content" id="content"><div class="col list-mode">`;
+    if (!any) h += `<div class="empty">${IC.empty}<b>目前沒有對話紀錄</b><small>開始對話後，紀錄會保留在這裡</small><button class="btn pri" type="button" data-act="newchat" style="padding:10px 12px">開始新對話</button></div>`;
+    else S.hist.forEach(([g, l], gi) => { if (!l.length) return; h += `<div class="glabel">${g}</div>`; l.forEach((t, i) => { const k = gi + ':' + i; h += `<div class="hi ${S.histHover === k || S.histMenu === k ? 'hov' : ''}" data-hk="${k}" data-act="hopen" data-k="${k}"><span>${esc(t.title)}</span><button class="ib" type="button" data-act="hmenu" data-k="${k}" aria-label="更多">${IC.more}</button>${S.histMenu === k ? `<div class="dd" style="right:-4px;top:48px;width:180px"><button type="button" class="del" data-act="hdel" data-k="${k}">刪除</button></div>` : ''}</div>`; }); });
+    h += `</div></div>`;
+  }
+  win.innerHTML = h;
+  S.msgs.forEach(m => { m._shown = true; });
+  if (S.welcomeIn) { win.querySelector('.welcome-mode')?.classList.add('w-in'); S.welcomeIn = false; }
+  layer.innerHTML = S.dialog ? `<div class="scrim"></div><div class="dialog" role="dialog" aria-label="刪除確認"><p>您是否要刪除此對話紀錄？</p><div class="row"><button class="btn sec" type="button" data-act="dcancel">取消</button><button class="btn pri" type="button" data-act="dok">刪除</button></div></div>` : '';
+  const ta = $('ta');
+  if (ta) { ta.value = S.text; autosize(ta); if (focused) { ta.focus(); try { ta.setSelectionRange(selStart, selStart); } catch (e) {} } }
+  const c = $('content');
+  if (c) {
+    const tail = $('tail');
+    if (S.anchor != null) {
+      const el = $('col').children[S.anchor];
+      if (el) { tail.style.height = '0px'; const need = c.clientHeight - (c.scrollHeight - el.offsetTop) + 24; tail.style.height = Math.max(0, need) + 'px'; c.scrollTop = el.offsetTop - 24; }
+    } else if (S.scrollTop) { c.scrollTop = 0; S.scrollTop = false; }
+    else c.scrollTop = prevAtBottom ? c.scrollHeight : prevTop;
+    c.addEventListener('scroll', updScrollBtn); updScrollBtn();
+    // 出現捲軸時扣掉捲軸寬度，讓訊息右緣與下方提示、輸入框右緣對齊
+    const col = $('col'), sb = c.offsetWidth - c.clientWidth;
+    if (col && S.view === 'chat') col.style.paddingRight = Math.max(0, 24 - sb) + 'px';
+  }
+}
+function updScrollBtn() {
+  const c = $('content'); if (!c || S.view !== 'chat') return;
+  let b = win.querySelector('.scrolldown');
+  const show = S.msgs.length && S.anchor == null && c.scrollHeight - c.scrollTop - c.clientHeight > 40;
+  if (show && !b) { b = document.createElement('button'); b.className = 'scrolldown'; b.type = 'button'; b.dataset.act = 'tobottom'; b.setAttribute('aria-label', '回到最底部'); b.innerHTML = IC.scroll; b.style.top = (c.offsetTop + c.clientHeight - 60) + 'px'; win.appendChild(b); }
+  if (!show && b) b.remove();
+}
+function autosize(ta) { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; const line = ta.parentElement; line.scrollTop = line.scrollHeight; }
+function renderWelcome() {
+  return `<div class="welcome">${IC.ai}<h3>需要什麼樣的協助嗎？</h3></div><div class="sugs">${SUGS.map(([t], i) => `<button class="sug" type="button" data-sug="${t}" ${S.quota ? 'disabled' : ''}>${IC.sug[i].replace('width="48" height="48" viewBox="0 0 48 48"', 'width="32" height="32" viewBox="8 8 32 32"').replace(/<rect width="48"[^>]*\/>/, '')}<span class="tx"><b>${t}</b></span>${IC.arrowR}</button>`).join('')}</div>`;
+}
+function renderHints() {
+  let h = '';
+  if (S.hint === 'sel') h += `<div class="hint sel">${IC.selIcon}<span>3 個物件被選取</span><span class="sp"></span><button class="x" type="button" data-act="clearsel" aria-label="取消選取">${IC.x28}</button></div>`;
+  if (S.quota && !S.msgs.length) h += quotaHint();
+  return h;
+}
+function renderFoot() {
+  const hs = renderHints();
+  return `<div class="foot">${hs ? `<div class="hints">${hs}</div>` : ''}${renderComposer(false)}<div class="disc">AI 回答有時可能會出錯</div></div>`;
+}
+function renderComposer(big) {
+  const dis = S.quota;
+  const has = !!(S.text.trim() || S.skill);
+  const send = S.busy ? IC.stop : IC.send(has && !dis ? '#4a6ee4' : '#cdcdcd');
+  let h = `<div class="cmp ${dis ? 'dis' : ''} ${big ? 'big' : ''}">`;
+  const items = menuItems();
+  if (items) h += `<div class="menu ${items.length < 4 ? 'short' : ''}"><div class="mh">Skill</div><div class="ml">${items.map((s, k) => `<button class="mi ${k === S.menuIdx ? 'on' : ''}" type="button" data-skill="${s[0]}"><b>${s[0]}</b><small>${s[1]}</small></button>`).join('')}</div></div>`;
+  h += `<div class="line">`;
+  if (S.skill) h += `<span class="tok ${S.skillSel ? 'sel' : ''}">${S.skill}</span>`;
+  if (S.skill && !S.text && !S.skillSel && PARAM[S.skill]) h += `<span class="param">${PARAM[S.skill]}</span>`;
+  h += `<textarea id="ta" rows="1" aria-label="輸入訊息" placeholder="${S.skill ? '' : '描述你想做的事，或輸入 / 使用 Skill'}" ${dis ? 'disabled' : ''}></textarea></div>`;
+  h += `<div class="arow"><button class="chip" type="button" data-act="chip" ${dis ? 'disabled' : ''}><b>/</b>Skill</button><span class="sp"></span><button class="round" type="button" aria-label="語音輸入" ${dis ? 'disabled' : ''}>${IC.mic(dis)}</button><button class="round" type="button" data-act="send" aria-label="${S.busy ? '停止' : '送出'}" ${dis ? 'disabled' : ''}>${send}</button></div>`;
+  return h + '</div>';
+}
+const quotaHint = () => `<div class="hint quota">${IC.err}<span>AI 點數額度不足，請聯絡管理員調整配額。</span></div>`;
+function menuItems() { if (S.skill || !S.text.startsWith('/') || S.text.includes(' ') || S.busy) return null; const q = S.text; const r = SKILLS.filter(s => s[0].startsWith(q)); return r.length ? r : null; }
+function renderMsg(m, i) {
+  const live = !m.answered;
+  switch (m.t) {
+    case 'u': return `<div class="u">${esc(m.text)}</div>`;
+    case 'a': return `<div class="a">${esc(m.text)}${m.cursor ? '<span class="cursor"></span>' : ''}</div>`;
+    case 'quota': return quotaHint();
+    case 'status': return `<div class="status">${IC.spark}<span class="shimmer">${m.text}</span></div>`;
+    case 'plan': return `<div class="plan"><div class="task"><div class="tr">${IC.spark}<b>${m.title}</b><small>${m.prog || (Math.min(m.cur + 1, m.steps.length) + '/' + m.steps.length)}</small></div><div class="st shimmer">正在執行任務</div></div><hr><ol>${m.steps.map((s, k) => `<li class="${k === m.cur ? 'cur' : ''}">${k < m.cur ? IC.stepDone : k === m.cur ? IC.stepCur : IC.stepTodo}<span>${s}</span></li>`).join('')}</ol></div>`;
+    case 'ok': return `<div class="r"><div class="msg">${m.text}</div>${m.undo ? `<div class="acts"><button class="btn" type="button" data-act="undo" data-i="${i}">復原</button></div>` : ''}</div>`;
+    case 'nav': return `<div class="r"><div class="msg">${m.text}</div><div class="acts"><button class="btn sec" type="button" data-act="nav" data-i="${i}">前往查看</button></div></div>`;
+    case 'confirm': return live ? `<div class="r"><div class="msg">${m.text}</div><div class="acts end"><button class="btn" type="button" data-act="cno" data-i="${i}">取消</button><button class="btn pri" type="button" data-act="cyes" data-i="${i}">確定</button></div></div>` : `<div class="r"><div class="msg">${m.text}</div></div>`;
+    case 'single': {
+      if (!live) return `<div class="a">${m.text}</div>`;
+      const more = m.opts.length > 5 && !m.short; const shown = more && !m.exp ? m.opts.slice(0, 5) : m.opts;
+      return `<div class="r"><div class="msg">${m.text}</div><div class="acts">${shown.map(o => `<button class="btn" type="button" data-act="pick" data-i="${i}" data-v="${o}">${o}</button>`).join('')}${more && !m.exp ? `<button class="lk" type="button" data-act="exp" data-i="${i}">更多選項${IC.dropDown}</button>` : ''}</div>${more && m.exp ? `<div class="acts"><button class="lk" type="button" data-act="exp" data-i="${i}">收合${IC.dropUp}</button></div>` : ''}</div>`; }
+    case 'multi': {
+      if (!live) return `<div class="a">${m.text}</div>`;
+      const n = m.on.filter(Boolean).length, all = n === m.items.length;
+      return `<div class="r"><div class="msg">${m.text}</div><div class="items"><div class="it all"><span class="l" data-act="all" data-i="${i}"><span class="chk" role="checkbox" aria-checked="${all ? 'true' : n ? 'mixed' : 'false'}" tabindex="0" data-act="all" data-i="${i}">${all ? IC.chkOn : n ? IC.chkMid : IC.chkOff}</span>全選</span><button class="lk plain" type="button" data-act="all" data-i="${i}">${all ? '取消全選' : '全選'}</button></div>${m.items.map((it, k) => `<div class="it" data-act="item" data-i="${i}" data-k="${k}"><span class="chk" role="checkbox" aria-checked="${m.on[k]}" tabindex="0" data-act="item" data-i="${i}" data-k="${k}">${m.on[k] ? IC.chkOn : IC.chkOff}</span><span>${it}</span></div>`).join('')}</div><div class="acts end"><button class="btn" type="button" data-act="mcancel" data-i="${i}">取消</button><button class="btn pri" type="button" data-act="mok" data-i="${i}" ${n ? '' : 'disabled'}>${m.verb} ${n} 項</button></div></div>`; }
+    case 'corr': return `<div class="r"><div class="msg">${m.text}</div>${live ? `<div class="msg">建議你可以改畫：</div><div class="acts stack">${m.opts.map(o => `<button class="btn" type="button" data-act="pick" data-i="${i}" data-v="${o}">${o}</button>`).join('')}</div>` : ''}</div>`;
+    case 'err': return `<div class="r err"><div class="emsg">${IC.err}<span>${m.text}</span></div>${m.blocked ? '' : `<div class="acts"><button class="btn" type="button" data-act="retry" data-i="${i}">再試一次</button></div>`}</div>`;
+  }
+  return '';
+}
+
+/* ---------- 流程 ---------- */
+const push = m => { S.msgs.push(m); render(); return m; };
+const drop = m => { const k = S.msgs.indexOf(m); if (k >= 0) S.msgs.splice(k, 1); };
+function think(ms, then, stage = '理解需求中') { S.busy = true; const st = push({ t: 'status', text: stage }); S.cancel = () => drop(st); later(ms, () => { drop(st); S.busy = false; S.cancel = null; then(); render(); }); }
+function plan({ title, steps, lock, done, prog }) {
+  S.busy = true; const before = S.bg; if (lock) S.bg = lock;
+  const p = push({ t: 'plan', title, steps, cur: 0, prog: prog && prog(0) });
+  S.cancel = () => { drop(p); S.bg = before; };
+  const tick = () => { p.cur++; p.prog = prog && prog(p.cur); if (p.cur >= steps.length) { later(1000, () => { drop(p); S.busy = false; S.cancel = null; done(before); render(); }); } else later(1500, tick); render(); };
+  later(1500, tick);
+}
+function stream(text, from = 0) {
+  S.busy = true; const m = push({ t: 'a', text: text.slice(0, from), cursor: true });
+  let k = from; S.cancel = () => { m.cursor = false; };
+  const step = () => { k = Math.min(text.length, k + 3); m.text = text.slice(0, k); render(); if (k < text.length) later(40, step); else later(400, () => { m.cursor = false; S.busy = false; S.cancel = null; render(); }); };
+  later(300, step);
+}
+function stop() { if (!S.busy) return; clearTimers(); S.cancel && S.cancel(); S.cancel = null; S.busy = false; S.msgs = S.msgs.filter(m => m.t !== 'status' && m.t !== 'plan'); render(); }
+const ok = (text, revert) => push({ t: 'ok', text, undo: true, revert });
+
+function saveChat() {
+  if (!S.msgs.some(m => m.t === 'u')) return;
+  const msgs = S.msgs.filter(m => m.t !== 'status' && m.t !== 'plan').map(({ _shown, revert, revertBg, ...m }) => m);
+  if (S.chatRef) { S.chatRef.msgs = msgs; return; }
+  const title = S.msgs.find(m => m.t === 'u').text.slice(0, 14);
+  S.chatRef = { title, msgs }; S.hist[0][1].unshift(S.chatRef);
+}
+function send(text, skill, noAnim) {
+  const full = (skill ? skill + (text ? ' ' + text : '') : text).trim();
+  if (!full || S.busy || S.quota || S.leaving) return;
+  // 首頁 → 對話：歡迎區先淡出上移，再長出第一則訊息
+  const col = $('col');
+  if (!noAnim && !S.msgs.length && col && col.classList.contains('welcome-mode') && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    S.leaving = true; col.classList.add('leaving');
+    later(240, () => { S.leaving = false; send(text, skill, true); });
+    return;
+  }
+  S.msgs.forEach(m => { if (m.t === 'ok') m.undo = false; });
+  S.more = null; S.hint = null;
+  const overflow = (() => { const c = $('content'); return c && c.scrollHeight > c.clientHeight + 4; })();
+  S.msgs.push({ t: 'u', text: full }); S.anchor = overflow ? S.msgs.length - 1 : null;
+  render();
+  if (S.quotaMode === 'last') { S.quotaMode = 'empty'; S.quota = true; push({ t: 'quota' }); return; }
+  route(full);
+}
+// 畫布上有什麼：指令依此判斷能不能做、做完換成哪張畫布
+const CAP = {
+  base: {}, sel: { stickies: 3, selected: 3 }, stickies: { stickies: 6 }, clsBefore: { stickies: 6 }, bulkBefore: { stickies: 6, pink: 2 },
+  bulkLocked: { stickies: 6, pink: 2, locked: true }, cls2: { stickies: 2, selected: 2 }, gramBefore: { text: true }, gramDone: { text: true },
+  attBefore: { links: 6 }, attDone: { pages: 3 }, attStay: { links: 6, pages: 3 }, clsStay: { stickies: 6 }, brainDone: { stickies: 8 }, clsDone: { stickies: 6 }, sumDone: { stickies: 6 }, groupDone: { groups: 4 }, groupTeam: { groups: 4 },
+  court: {}, math: {}, sci: {}, chi: {}, eng: {}, quiz: {}, team: {}, split: {} };
+const cap = () => CAP[S.bg] || {};
+const reply = (ms, m) => think(ms, () => S.msgs.push(typeof m === 'string' ? { t: 'a', text: m } : m));
+function route(full) {
+  const [cmd, ...rest] = full.split(' '); const arg = rest.join(' ').trim(); const c = cap();
+  if (/不適宜|髒話/.test(full)) return reply(900, { t: 'err', text: '偵測到不適宜內容，已由內容守門員封鎖。', blocked: true });
+  if (S.net === 'off') return reply(900, { t: 'err', text: ERRORS.net, redo: full });
+  if (S.nextErr) { const e = S.nextErr; S.nextErr = null; syncPanel(); return reply(1000, { t: 'err', text: ERRORS[e], redo: full }); }
+  if (S.await === 'topic' && !full.startsWith('/')) { S.await = null; return brain(); }
+  if (cmd === '/group') {
+    if (!arg) return reply(700, { t: 'single', text: '您要建立幾個隊伍？', opts: GROUPS, kind: 'group' });
+    const n = parseInt(arg, 10); if (!(n >= 2 && n <= 8) || String(n) !== arg.replace(/\s*組$/, '')) return reply(700, '請輸入組數（2–8）。');
+    return doGroup(n);
+  }
+  if (cmd === '/classify') {
+    if (!c.stickies) return reply(700, '頁面上沒有便利貼可以分群。');
+    if (c.stickies < 3) return reply(700, '需選取 3 個以上的便利貼才能執行分群。');
+    return plan({ title: '便利貼分群', steps: [`分析 ${c.stickies} 張便利貼的語意`,'產生分群標題','新增一頁並排列分群'], lock: 'stickLock', done: b => { S.bg = 'clsStay'; S.msgs.push({ t: 'nav', text: '已依語意將便利貼完成分群排列。', target: 'clsDone' }); } });
+  }
+  if (cmd === '/summarize') {
+    if (!c.stickies && !c.text) return reply(700, '頁面上沒有可以歸納的內容。');
+    return plan({ title: '歸納重點', steps: [c.text ? '讀取頁面文字' : `讀取 ${c.stickies} 張便利貼`,'歸納重點','新增摘要至畫布'], lock: c.stickies ? 'stickLock' : null, done: b => { if (c.stickies) S.bg = 'sumDone'; ok('已完成重點摘要，並新增至畫布。', b); } });
+  }
+  if (cmd === '/grammar-check') {
+    if (!c.text && !c.stickies) return reply(700, '頁面上沒有文字可以檢查。');
+    if (!c.text || S.bg === 'gramDone') return plan({ title: '檢查錯別字', steps: ['讀取頁面上的文字框與便利貼','比對錯字與文法','列出需要更正的項目'], done: () => S.msgs.push({ t: 'a', text: '沒有發現錯別字。' }) });
+    return plan({ title: '檢查錯別字', steps: ['讀取頁面上的文字框與便利貼','比對錯字與文法','列出需要更正的項目'], lock: 'gramLock', done: b => { S.bg = b; S.msgs.push({ t: 'multi', text: '檢查發現了 5 個錯別字，需要更正哪些？', items: TYPO5, on: TYPO5.map(() => true), verb: '更正', kind: 'gram5', revertBg: b }); } });
+  }
+  if (cmd === '/attachment') {
+    if (!c.links) return reply(700, '頁面上沒有外部連結。');
+    return plan({ title: '彙整外部連結', steps: [`找到 ${c.links} 個外部連結`,'依類別分頁整理','新增彙整頁面'], lock: 'attLock', done: () => { S.bg = 'attStay'; S.msgs.push({ t: 'nav', text: '已彙整外部連結，共新增 3 頁。', target: 'attDone' }); } });
+  }
+  if (cmd === '/bulk-edit') return bulk(arg);
+  if (full === '課堂講解') return reply(700, { t: 'single', text: '課程類型是什麼？', opts: COURSES, kind: 'course' });
+  if (full === '腦力激盪') return think(700, () => { S.msgs.push({ t: 'a', text: BRAIN_Q }); S.await = 'topic'; });
+  if (full === '小組討論') return reply(700, { t: 'single', text: '要建立幾個小組？', opts: GROUPS, kind: 'team' });
+  if (/分割畫布/.test(full)) return reply(700, { t: 'single', text: '您要開啟幾分割畫布？', opts: ['2 格','3 格'], short: true, kind: 'split' });
+  if (/籃球場/.test(full)) return think(1200, () => { const b = S.bg; S.bg = 'court'; ok('沒問題，已換成籃球場的背景圖。', b); });
+  if (/錯別字/.test(full)) return think(1100, () => c.text ? route('/grammar-check') : plan({ title: '檢查錯別字', steps: ['讀取頁面上的文字框與便利貼','比對錯字與文法','列出需要更正的項目'], done: () => S.msgs.push({ t: 'multi', text: '檢查發現了 2 個錯別字，需要更正哪些？', items: TYPO2, on: [true, true], verb: '更正', kind: 'gram2' }) }));
+  if (/^1 ?加到 ?10/.test(full)) return reply(900, SUM1);
+  if (/整理.*重點/.test(full)) return c.stickies ? think(900, () => stream(LONG)) : reply(800, '頁面上沒有便利貼可以整理。');
+  if (/畢氏/.test(full)) return think(900, () => stream(PYTH));
+  if (/餘弦/.test(full)) return think(900, () => stream(COS));
+  if (/三角形/.test(full)) return reply(900, { t: 'corr', text: '我目前只支援繪製「等腰三角形」與「直角三角形」，因此無法繪製 80°-60°-40° 的不等邊三角形。', opts: ['等腰三角形 80°-50°-50°','直角三角形 90°-60°-30°','直角三角形 90°-45°-45°'] });
+  if (/依顏色分組/.test(full)) return c.stickies ? think(900, () => plan({ title: '依顏色分組便利貼', steps: ['讀取便利貼顏色','分成 4 組並排列','完成並回報結果'], done: () => ok('已依顏色將便利貼分成 4 組。', S.bg) })) : reply(800, '頁面上沒有便利貼可以分組。');
+  return reply(800, '我目前還不會處理這個要求，可以試試右側「試試看」的指令。');
+}
+function bulk(arg) {
+  const c = cap();
+  if (!arg || !/把.+改成.+/.test(arg)) return reply(700, BULK_ERR[4][2]);
+  if (/粗體|字體|大小|旋轉|對齊/.test(arg)) return reply(700, BULK_ERR[0][2]);
+  if (/圖片|檔案/.test(arg)) return reply(700, BULK_ERR[1][2]);
+  if (/彩虹|漸層|透明/.test(arg)) return reply(700, BULK_ERR[3][2]);
+  const m = arg.match(/把(.+?)色?(便利貼|筆跡|文字|幾何圖形|物件).*改成(.+?)色?$/);
+  if (!m) return reply(700, BULK_ERR[4][2]);
+  const from = m[1].replace(/色$/, ''), obj = m[2], to = m[3].replace(/色$/, '');
+  if (!(from === '粉紅' && obj === '便利貼' && c.pink)) return reply(700, `找不到${from}色${obj}，請換個條件試試。`);
+  if (c.locked) return reply(700, { t: 'confirm', text: CONFIRM_T, to });
+  return plan({ title: '批次修改顏色', steps: [`找出粉紅色便利貼（${c.pink} 張）`,`更新為${to}色`,'完成並回報結果'], lock: 'bulkLock', done: b => { S.bg = 'stickies'; ok(`已將 ${c.pink} 張便利貼更新為${to}色。`, b); } });
+}
+function doGroup(n, team) {
+  plan({ title: `建立 ${n} 組討論區`, steps: [`均分畫布為 ${n} 區`,'加上組別標題','鎖定組別區塊'], lock: S.bg === 'stickies' ? 'stickLock' : null, done: b => { S.bg = team ? 'groupTeam' : 'groupDone'; ok(team ? `已建立 ${n} 組討論區塊，並開啟記分板。` : `已成功劃分 ${n} 組討論區塊。`, b); } });
+}
+function brain() {
+  plan({ title: '建立腦力激盪', steps: ['建立主題文字框','新增便利貼','排列並對齊便利貼'], lock: 'brainLock', prog: k => `${Math.min(k + 1, 3)}/3`, done: b => { S.bg = 'brainDone'; ok('已建立腦力激盪主題，並新增 8 張便利貼。', b); } });
+  const p = S.msgs[S.msgs.length - 1]; let c = 0; const add = () => { if (p.cur === 1 && c < 8) { c++; p.steps[1] = `新增便利貼（${c}/8）`; render(); } if (S.msgs.includes(p)) later(140, add); }; later(1200, add);
+}
+
+/* ---------- 事件 ---------- */
+win.addEventListener('input', e => { if (e.target.id !== 'ta') return; S.text = e.target.value; if (S.skillSel) S.skillSel = false; S.menuIdx = 0; render(); });
+win.addEventListener('keydown', e => {
+  if (e.target.id !== 'ta') { if ((e.key === 'Enter' || e.key === ' ') && e.target.classList.contains('chk')) { e.preventDefault(); e.target.click(); } return; }
+  const items = menuItems();
+  if (items) {
+    if (e.key === 'ArrowDown') { e.preventDefault(); S.menuIdx = (S.menuIdx + 1) % items.length; render(); return; }
+    if (e.key === 'ArrowUp') { e.preventDefault(); S.menuIdx = (S.menuIdx - 1 + items.length) % items.length; render(); return; }
+    if (e.key === 'Enter') { e.preventDefault(); pickSkill(items[S.menuIdx][0]); return; }
+  }
+  if (e.key === 'Backspace' && !S.text && S.skill) { e.preventDefault(); if (S.skillSel) { S.skill = null; S.skillSel = false; } else S.skillSel = true; render(); return; }
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); }
+});
+function pickSkill(s) { S.skill = s; S.skillSel = false; S.text = ''; render(); $('ta')?.focus(); }
+function submit() {
+  if (S.busy) return stop();
+  let t = S.text.trim(), sk = S.skill;
+  if (!sk && t.startsWith('/')) { const m = SKILLS.find(s => t.split(' ')[0] === s[0]); if (m) { sk = m[0]; t = t.slice(m[0].length).trim(); } }
+  if (!t && !sk) return;
+  S.text = ''; S.skill = null; S.skillSel = false;
+  send(t, sk);
+}
+win.addEventListener('mousedown', e => { const b = e.target.closest('[data-skill]'); if (b) { e.preventDefault(); pickSkill(b.dataset.skill); } });
+win.addEventListener('mouseover', e => { const r = e.target.closest('.hi'); const k = r ? r.dataset.hk : null; if (k === S.histHover) return; S.histHover = k; win.querySelectorAll('.hi').forEach(x => x.classList.toggle('hov', x.dataset.hk === k || x.dataset.hk === S.histMenu)); });
+win.addEventListener('mouseleave', () => { S.histHover = null; win.querySelectorAll('.hi').forEach(x => x.classList.toggle('hov', x.dataset.hk === S.histMenu)); });
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-act],[data-sug]');
+  if (!t) { if (S.more || S.histMenu) { if (!e.target.closest('.dd')) { S.more = null; S.histMenu = null; render(); } } return; }
+  if (!t.closest('#stage')) return;
+  if (t.dataset.sug) return send(t.dataset.sug, null);
+  const act = t.dataset.act, i = +t.dataset.i, m = S.msgs[i];
+  switch (act) {
+    case 'send': return submit();
+    case 'chip': S.text = '/'; S.skill = null; render(); $('ta').focus(); return;
+    case 'more': S.more = S.more ? null : (S.quotaMode === 'low' ? 'low' : 'normal'); render(); return;
+    case 'close': S.open = false; S.more = null; render(); return;
+    case 'newchat': clearTimers(); saveChat(); Object.assign(S, { chatRef: null, await: null, view: 'chat', msgs: [], more: null, busy: false, anchor: null, text: '', skill: null, leaving: false, welcomeIn: true }); render(); return;
+    case 'history': S.view = 'history'; S.more = null; render(); return;
+    case 'back': S.view = 'chat'; S.histMenu = null; render(); return;
+    case 'hopen': { const [g, k] = t.dataset.k.split(':').map(Number); const ch = S.hist[g][1][k]; clearTimers(); saveChat(); Object.assign(S, { view: 'chat', chatRef: ch, msgs: JSON.parse(JSON.stringify(ch.msgs)).map(m => ({ ...m, _shown: true, answered: true, undo: false })), busy: false, anchor: null, histMenu: null, await: null }); render(); return; }
+    case 'hmenu': S.histMenu = S.histMenu === t.dataset.k ? null : t.dataset.k; render(); return;
+    case 'hdel': S.delKey = t.dataset.k; S.dialog = true; render(); return;
+    case 'dcancel': S.dialog = false; S.histMenu = null; render(); return;
+    case 'dok': { const [g, k] = S.delKey.split(':').map(Number); const [del] = S.hist[g][1].splice(k, 1); if (del === S.chatRef) S.chatRef = null; S.dialog = false; S.histMenu = null; render(); return; }
+    case 'clearsel': S.hint = null; S.bg = 'base'; render(); return;
+    case 'tobottom': { const c = $('content'); c.scrollTo({ top: c.scrollHeight, behavior: 'smooth' }); return; }
+    case 'undo': m.undo = false; S.msgs.push({ t: 'u', text: '復原' }); if (m.revert) S.bg = m.revert; render(); return think(800, () => S.msgs.push({ t: 'a', text: /籃球場/.test(m.text) ? '已回復上一步的變更。需要換成其他球場圖嗎？' : '已回復上一步的變更。' }));
+    case 'exp': m.exp = !m.exp; render(); return;
+    case 'pick': {
+      if (S.busy) return; const v = t.dataset.v; m.answered = true; S.msgs.forEach(x => { if (x.t === 'ok') x.undo = false; });
+      if (m.kind === 'group') { S.msgs.push({ t: 'u', text: v }); render(); return doGroup(parseInt(v, 10)); }
+      if (m.kind === 'team') { S.msgs.push({ t: 'u', text: v }); render(); return doGroup(parseInt(v, 10), true); }
+      if (m.kind === 'course') { S.msgs.push({ t: 'u', text: COURSE_USER[v] || v }); render(); return think(700, () => S.msgs.push({ t: 'multi', text: '要開啟哪些小工具？', items: TOOLS[v], on: TOOLS[v].map(() => true), verb: '開啟', kind: 'tools', course: v })); }
+      if (m.kind === 'split') { S.msgs.push({ t: 'u', text: v }); render(); return think(900, () => { S.bg = 'split'; S.winX = 112; ok(v === '3 格' ? '已開啟三分割畫布。' : '已開啟二分割畫布。', 'stickies'); }); }
+      S.msgs.push({ t: 'u', text: v }); render(); return think(900, () => ok(`已繪製${v}。`, S.bg));
+    }
+    case 'cyes': { m.answered = true; const to = m.to || '白'; S.msgs.push({ t: 'u', text: '確定' }); render(); return plan({ title: '批次修改顏色', steps: ['解除 2 張便利貼的鎖定',`更新為${to}色`,'完成並回報結果'], lock: 'bulkLock', done: b => { S.bg = 'stickies'; ok(`已解除鎖定，並將 2 張便利貼更新為${to}色。`, b); } }); }
+    case 'cno': m.answered = true; S.msgs.push({ t: 'u', text: '取消' }); render(); return;
+    case 'item': m.on[+t.dataset.k] = !m.on[+t.dataset.k]; render(); return;
+    case 'all': { const all = m.on.every(Boolean); m.on = m.on.map(() => !all); render(); return; }
+    case 'mcancel': m.answered = true; S.msgs.push({ t: 'u', text: '取消' }); render(); return;
+    case 'mok': {
+      const n = m.on.filter(Boolean).length; m.answered = true; S.msgs.forEach(x => { if (x.t === 'ok') x.undo = false; });
+      if (m.kind === 'tools') { S.msgs.push({ t: 'u', text: `開啟 ${n} 項` }); render(); const [img, txt] = COURSE_DONE[m.course]; return think(1000, () => { S.bg = img; ok(txt, 'base'); if (m.course === '小組活動') S.msgs.push({ t: 'single', text: '您要開啟幾分割畫布？', opts: ['2 格','3 格'], short: true, kind: 'split' }); }); }
+      if (m.kind === 'gram5') { S.msgs.push({ t: 'u', text: `更正 ${n} 項` }); render(); return think(1000, () => { S.bg = 'gramDone'; ok(`校對完成，共修正 ${n} 處文字。`, m.revertBg); }); }
+      S.msgs.push({ t: 'u', text: `更正 ${n} 項` }); render(); return think(1000, () => ok(`校對完成，共修正 ${n} 處文字。`, S.bg));
+    }
+    case 'retry': S.msgs.splice(i, 1); render(); return route(m.redo);
+    case 'nav': if (m.target) { S.bg = m.target; render(); } return;
+  }
+});
+$('aiHot').onclick = () => { S.open = !S.open; render(); };
+win.addEventListener('scroll', () => {}, true);
+win.addEventListener('wheel', () => { if (S.anchor != null) { S.anchor = null; const tail = $('tail'); if (tail) tail.style.height = '0px'; } }, { passive: true });
+
+/* ---------- 右側：環境開關＋試試看（不會重設畫面） ---------- */
+const CANVAS_OPTS = [['base','空白頁'],['stickies','園遊會便利貼 6 張'],['bulkBefore','彩色便利貼（含粉紅）'],['bulkLocked','粉紅便利貼已鎖定'],['gramBefore','文字段落（有錯字）'],['attBefore','含外部連結'],['cls2','只選 2 張便利貼'],['sel','選取 3 個物件']];
+const CANVAS_NAME = Object.assign(Object.fromEntries(CANVAS_OPTS), { clsDone: '分群結果頁（第 2/2 頁）', court: '籃球場背景', sumDone: '摘要已加入', groupDone: '4 組討論區', groupTeam: '3 組＋記分板', brainDone: '腦力激盪 8 張', attDone: '連結彙整頁（第 2/4 頁）', attStay: '含外部連結（第 1/4 頁）', clsStay: '園遊會便利貼（第 1/2 頁）', gramDone: '錯字已更正', math: '數學小工具', sci: '自然科學小工具', chi: '國語文小工具', eng: '英文小工具', quiz: '測驗小工具', team: '小組活動小工具', split: '三分割畫布', stickLock: 'AI 編輯中', bulkLock: 'AI 編輯中', gramLock: 'AI 編輯中', attLock: 'AI 編輯中', brainLock: 'AI 編輯中' });
+const ENV = [
+  ['quotaMode', 'AI 點數', [['ok','充足'],['low','低於 20%'],['last','下一則用完'],['empty','已用完']]],
+  ['net', '網路', [['ok','正常'],['off','離線']]],
+  ['nextErr', '下一則回應', [[null,'正常'],['parse','解析錯誤'],['halt','任務中斷']]]];
+const TRY = [
+  ['Skill', ['/', '/group', '/group 10', '/classify', '/summarize', '/grammar-check', '/attachment', '/bulk-edit 把粉紅色便利貼改成白色', '/bulk-edit 把紅色便利貼改成白色', '/bulk-edit 把文字改成粗體', '/bulk-edit']],
+  ['能力範圍', ['課堂講解', '腦力激盪', '小組討論', '請幫我開啟分割畫布']],
+  ['一般對話', ['請換成籃球場背景', '請檢查這頁有無錯別字', '1 加到 10 =', '請幫我整理這頁便利貼的重點', '什麼是畢氏定理？', '畫一個 80°-60°-40° 的三角形', '請把這頁的便利貼依顏色分組', '（不適宜內容測試）']]];
+function syncPanel() {
+  $('cv').innerHTML = `目前畫布：<b>${CANVAS_NAME[S.bg] || S.bg}</b>`;
+  document.querySelectorAll('[data-canvas]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.canvas === S.bg)));
+  document.querySelectorAll('[data-env]').forEach(b => b.setAttribute('aria-pressed', String(String(S[b.dataset.env]) === b.dataset.v)));
+}
+function setCanvas(k) { S.bg = k; S.hint = k === 'sel' ? 'sel' : null; render(); syncPanel(); }
+function setEnv(key, v) {
+  S[key] = v === 'null' ? null : v;
+  if (key === 'quotaMode') { S.quota = v === 'empty'; S.more = null; if (!S.quota) S.msgs = S.msgs.filter(m => m.t !== 'quota'); }
+  render(); syncPanel();
+}
+function fillTry(t) {
+  if (S.view !== 'chat') S.view = 'chat';
+  const sk = SKILLS.find(s => t === s[0] || t.startsWith(s[0] + ' '));
+  if (sk) { S.skill = sk[0]; S.skillSel = false; S.text = t.slice(sk[0].length).trim(); } else { S.skill = null; S.text = t; }
+  S.menuIdx = 0; render(); const ta = $('ta'); if (ta && !ta.disabled) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+}
+$('panel').innerHTML = `<div class="sec"><h4>畫布內容</h4><p id="cv"></p><div class="chips">${CANVAS_OPTS.map(([k, n]) => `<button type="button" data-canvas="${k}">${n}</button>`).join('')}</div></div>`
+  + ENV.map(([key, label, opts]) => `<div class="sec"><h4>${label}</h4><div class="chips">${opts.map(([v, n]) => `<button type="button" data-env="${key}" data-v="${v}">${n}</button>`).join('')}</div></div>`).join('')
+  + `<div class="sec"><h4>規格備註</h4><p class="note">小工具開啟規則：有小視窗功能的工具，開啟後預設為小視窗，由畫面右上角往下排列（距右 24、距上 64、間距 16）；沒有小視窗的工具以原始尺寸顯示在預設位置；需要使用者先作決定的工具（如記分板選隊伍數）停在選擇畫面。</p></div>`
+  + `<div class="sec"><h4>試試看<small>點了會填進輸入框，按 Enter 送出</small></h4>${TRY.map(([g, l]) => `<div class="tg">${g}</div><div class="tries">${l.map(t => `<button type="button" data-try="${esc(t)}">${esc(t)}</button>`).join('')}</div>`).join('')}</div>`;
+$('panel').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.canvas) return setCanvas(b.dataset.canvas);
+  if (b.dataset.env) return setEnv(b.dataset.env, b.dataset.v);
+  if (b.dataset.try != null) return fillTry(b.dataset.try);
+});
+$('reset').onclick = () => { clearTimers(); S = fresh(); render(); syncPanel(); };
+const _render = render; render = function () { _render(); if ($('cv')) syncPanel(); };
+S = fresh(); render(); syncPanel();
+})();
+</script>
+
+</body>
+</html>
