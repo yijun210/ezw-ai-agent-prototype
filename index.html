@@ -434,7 +434,8 @@ function renderWelcome() {
 }
 function renderHints() {
   let h = '';
-  if (S.hint === 'sel') h += `<div class="hint sel">${IC.selIcon}<span>3 個物件被選取</span><span class="sp"></span><button class="x" type="button" data-act="clearsel" aria-label="取消選取">${IC.x28}</button></div>`;
+  const selN = { sel: 3, cls2: 2, clsBefore: 6, clsStay: 6 }[S.bg];
+  if (selN) h += `<div class="hint sel">${IC.selIcon}<span>${selN} 個物件被選取</span><span class="sp"></span><button class="x" type="button" data-act="clearsel" aria-label="取消選取">${IC.x28}</button></div>`;
   if (S.quota && !S.msgs.length) h += quotaHint();
   return h;
 }
@@ -446,14 +447,14 @@ function renderComposer(big) {
   const dis = S.quota;
   const has = !!(S.text.trim() || S.skill);
   const send = S.busy ? IC.stop : IC.send(has && !dis ? '#4a6ee4' : '#cdcdcd');
-  let h = `<div class="cmp ${dis ? 'dis' : ''} ${big ? 'big' : ''}">`;
+  let h = `<div class="cmp ${big ? 'big' : ''}">`;
   const items = menuItems();
   if (items) h += `<div class="menu ${items.length < 4 ? 'short' : ''}"><div class="mh">Skill</div><div class="ml">${items.map((s, k) => `<button class="mi ${k === S.menuIdx ? 'on' : ''}" type="button" data-skill="${s[0]}"><b>${s[0]}</b><small>${s[1]}</small></button>`).join('')}</div></div>`;
   h += `<div class="line">`;
   if (S.skill) h += `<span class="tok ${S.skillSel ? 'sel' : ''}">${S.skill}</span>`;
   if (S.skill && !S.text && !S.skillSel && PARAM[S.skill]) h += `<span class="param">${PARAM[S.skill]}</span>`;
-  h += `<textarea id="ta" rows="1" aria-label="輸入訊息" placeholder="${S.skill ? '' : '描述你想做的事，或輸入 / 使用 Skill'}" ${dis ? 'disabled' : ''}></textarea></div>`;
-  h += `<div class="arow"><button class="chip" type="button" data-act="chip" ${dis ? 'disabled' : ''}><b>/</b>Skill</button><span class="sp"></span><button class="round" type="button" aria-label="語音輸入" ${dis ? 'disabled' : ''}>${IC.mic(dis)}</button><button class="round" type="button" data-act="send" aria-label="${S.busy ? '停止' : '送出'}" ${dis ? 'disabled' : ''}>${send}</button></div>`;
+  h += `<textarea id="ta" rows="1" aria-label="輸入訊息" placeholder="${S.skill ? '' : '描述你想做的事，或輸入 / 使用 Skill'}"></textarea></div>`;
+  h += `<div class="arow"><button class="chip" type="button" data-act="chip"><b>/</b>Skill</button><span class="sp"></span><button class="round" type="button" data-act="send" aria-label="${S.busy ? '停止' : '送出'}" ${dis ? 'disabled' : ''}>${send}</button></div>`;
   return h + '</div>';
 }
 const quotaHint = () => `<div class="hint quota">${IC.err}<span>AI 點數額度不足，請聯絡管理員調整配額。</span></div>`;
@@ -562,8 +563,9 @@ function route(full) {
     return plan({ title: '檢查錯別字', steps: ['讀取頁面上的文字框與便利貼','比對錯字與文法','列出需要更正的項目'], lock: 'gramLock', done: b => { S.bg = b; S.msgs.push({ t: 'multi', text: '檢查發現了 5 個錯別字，需要更正哪些？', items: TYPO5, on: TYPO5.map(() => true), verb: '更正', kind: 'gram5', revertBg: b }); } });
   }
   if (cmd === '/attachment') {
-    if (!c.links) return reply(700, '頁面上沒有外部連結。');
-    return plan({ title: '彙整外部連結', steps: [`找到 ${c.links} 個外部連結`,'依類別分頁整理','新增彙整頁面'], lock: 'attLock', done: () => { S.bg = 'attStay'; S.msgs.push({ t: 'nav', text: '已彙整外部連結，共新增 3 頁。', target: 'attDone' }); } });
+    // 依 UI Flow：彙整「所有頁面」的連結，文件其他頁預設已有 6 個外部連結，在哪一頁都能執行；完成後停在目前頁，按前往查看才開啟彙整頁
+    const here = S.bg === 'attBefore' || S.bg === 'attStay';
+    return plan({ title: '彙整外部連結', steps: ['在所有頁面找到 6 個外部連結','依類別分頁整理','新增彙整頁面'], lock: here ? 'attLock' : null, done: b => { S.bg = here ? 'attStay' : b; S.msgs.push({ t: 'nav', text: '已彙整外部連結，共新增 3 頁。', target: 'attDone' }); } });
   }
   if (cmd === '/bulk-edit') return bulk(arg);
   if (full === '課堂講解') return reply(700, { t: 'single', text: '課程類型是什麼？', opts: COURSES, kind: 'course' });
@@ -617,6 +619,7 @@ win.addEventListener('keydown', e => {
 function pickSkill(s) { S.skill = s; S.skillSel = false; S.text = ''; render(); $('ta')?.focus(); }
 function submit() {
   if (S.busy) return stop();
+  if (S.quota) return;
   let t = S.text.trim(), sk = S.skill;
   if (!sk && t.startsWith('/')) { const m = SKILLS.find(s => t.split(' ')[0] === s[0]); if (m) { sk = m[0]; t = t.slice(m[0].length).trim(); } }
   if (!t && !sk) return;
@@ -645,7 +648,7 @@ document.addEventListener('click', e => {
     case 'hdel': S.delKey = t.dataset.k; S.dialog = true; render(); return;
     case 'dcancel': S.dialog = false; S.histMenu = null; render(); return;
     case 'dok': { const [g, k] = S.delKey.split(':').map(Number); const [del] = S.hist[g][1].splice(k, 1); if (del === S.chatRef) S.chatRef = null; S.dialog = false; S.histMenu = null; render(); return; }
-    case 'clearsel': S.hint = null; S.bg = 'base'; render(); return;
+    case 'clearsel': S.bg = S.bg === 'cls2' ? 'stickies' : 'base'; render(); return;
     case 'tobottom': { const c = $('content'); c.scrollTo({ top: c.scrollHeight, behavior: 'smooth' }); return; }
     case 'undo': m.undo = false; S.msgs.push({ t: 'u', text: '復原' }); if (m.revert) S.bg = m.revert; render(); return think(800, () => S.msgs.push({ t: 'a', text: /籃球場/.test(m.text) ? '已回復上一步的變更。需要換成其他球場圖嗎？' : '已回復上一步的變更。' }));
     case 'exp': m.exp = !m.exp; render(); return;
@@ -692,7 +695,7 @@ function syncPanel() {
   document.querySelectorAll('[data-canvas]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.canvas === S.bg)));
   document.querySelectorAll('[data-env]').forEach(b => b.setAttribute('aria-pressed', String(String(S[b.dataset.env]) === b.dataset.v)));
 }
-function setCanvas(k) { S.bg = k; S.hint = k === 'sel' ? 'sel' : null; render(); syncPanel(); }
+function setCanvas(k) { S.bg = k; render(); syncPanel(); }
 function setEnv(key, v) {
   S[key] = v === 'null' ? null : v;
   if (key === 'quotaMode') { S.quota = v === 'empty'; S.more = null; if (!S.quota) S.msgs = S.msgs.filter(m => m.t !== 'quota'); }
