@@ -523,6 +523,8 @@ function send(text, skill, noAnim) {
     return;
   }
   S.msgs.forEach(m => { if (m.t === 'ok') m.undo = false; });
+  // 依 UI Flow：重新送出後前一則錯誤不保留（成功只留結果，仍失敗也只留最新一則錯誤）
+  S.msgs = S.msgs.filter(m => m.t !== 'err');
   S.more = null; S.hint = null;
   const overflow = (() => { const c = $('content'); return c && c.scrollHeight > c.clientHeight + 4; })();
   S.msgs.push({ t: 'u', text: full }); S.anchor = overflow ? S.msgs.length - 1 : null;
@@ -677,7 +679,7 @@ document.addEventListener('click', e => {
       if (m.kind === 'gram5') { S.msgs.push({ t: 'u', text: `更正 ${n} 項` }); render(); return think(1000, () => { S.bg = 'gramDone'; ok(`校對完成，共修正 ${n} 處文字。`, m.revertBg); }); }
       S.msgs.push({ t: 'u', text: `更正 ${n} 項` }); render(); return think(1000, () => ok(`校對完成，共修正 ${n} 處文字。`, S.bg));
     }
-    case 'retry': S.msgs.splice(i, 1); render(); return route(m.redo);
+    case 'retry': if (S.busy) return; S.msgs.splice(i, 1); render(); return route(m.redo);
     case 'nav': if (m.target) { S.bg = m.target; render(); } return;
   }
 });
