@@ -370,6 +370,7 @@ const fresh = () => ({ bg: 'base', winX: 16, open: true, view: 'chat', msgs: [],
 
 /* ---------- 視窗渲染 ---------- */
 let render = function () {
+  if (composing) { renderPending = true; return; }
   // 畫布狀態切換：舊圖疊在上層淡出，避免結果瞬間跳出
   const nextSrc = `img/${S.bg}.jpg`;
   if (!bgEl.src.endsWith(nextSrc)) {
@@ -604,8 +605,13 @@ function brain() {
 }
 
 /* ---------- 事件 ---------- */
-win.addEventListener('input', e => { if (e.target.id !== 'ta') return; S.text = e.target.value; if (S.skillSel) S.skillSel = false; S.menuIdx = 0; render(); });
+// 注音／拼音等輸入法組字中不重繪，否則 textarea 被重建會中斷組字（只剩注音、選不了字）
+let composing = false, renderPending = false;
+win.addEventListener('compositionstart', e => { if (e.target.id === 'ta') composing = true; });
+win.addEventListener('compositionend', e => { if (e.target.id !== 'ta') return; composing = false; renderPending = false; S.text = e.target.value; if (S.skillSel) S.skillSel = false; S.menuIdx = 0; render(); });
+win.addEventListener('input', e => { if (e.target.id !== 'ta') return; S.text = e.target.value; if (composing || e.isComposing) { autosize(e.target); return; } if (S.skillSel) S.skillSel = false; S.menuIdx = 0; render(); });
 win.addEventListener('keydown', e => {
+  if (e.target.id === 'ta' && (composing || e.isComposing || e.keyCode === 229)) return;
   if (e.target.id !== 'ta') { if ((e.key === 'Enter' || e.key === ' ') && e.target.classList.contains('chk')) { e.preventDefault(); e.target.click(); } return; }
   const items = menuItems();
   if (items) {
