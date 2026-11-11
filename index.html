@@ -235,17 +235,23 @@ textarea:disabled::placeholder { color: var(--disabled); }
 .list .chips button:hover, .list .tries button:hover { border-color: var(--accent); }
 .list .chips button[aria-pressed="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
 .side .sec p.note { color: var(--ink); line-height: 1.55; }
-.tasks { display: grid; gap: 6px; }
-.list .tk { display: block; width: 100%; text-align: left; font: inherit; border: 1px solid var(--rule); background: var(--panel); color: var(--ink); border-radius: 10px; padding: 8px 10px; cursor: pointer; }
+.tasks { display: flex; flex-wrap: wrap; gap: 6px; }
+.tk.on { flex-basis: 100%; }
+.adv { border-top: 1px solid var(--rule); }
+.adv summary { cursor: pointer; padding: 10px 8px; font-size: .78rem; color: var(--ink-soft); }
+.adv summary:hover { color: var(--accent); }
+.th { display: flex; align-items: center; justify-content: space-between; }
+.list .tk { display: inline-block; text-align: left; font: inherit; font-size: .76rem; border: 1px solid var(--rule); background: var(--panel); color: var(--ink); border-radius: 999px; padding: 5px 12px; cursor: pointer; }
 .list .tk b { font-size: .8rem; font-weight: 500; }
 .list button.tk:hover { border-color: var(--accent); }
-.tk.on { border: 1px solid var(--accent); background: color-mix(in srgb, var(--accent) 7%, var(--panel)); border-radius: 10px; padding: 10px 12px; display: grid; gap: 6px; }
+.tk.on { border: 1px solid var(--accent); background: color-mix(in srgb, var(--accent) 7%, var(--panel)); border-radius: 10px; padding: 10px 12px; display: grid; gap: 4px; }
 .tk.on b { font-size: .84rem; font-weight: 600; }
 .side .sec .tk .who { margin: 0; font-size: .76rem; color: var(--ink-soft); line-height: 1.5; }
 .tk ol { margin: 0; padding-left: 20px; display: grid; gap: 4px; font-size: .78rem; line-height: 1.45; }
 .tk li.ok { color: var(--ink-soft); text-decoration: line-through; }
 .tk li.ok::marker { content: '✓  '; color: #1f9d55; }
 .side .sec .tk .recap { margin: 2px 0 0; font-size: .76rem; line-height: 1.55; color: var(--ink); background: color-mix(in srgb, #1f9d55 12%, transparent); border-radius: 8px; padding: 6px 8px; }
+.list .tk .again { padding: 0 4px; font-size: .9rem; }
 .list .tk .nx, .list .tk .again { display: inline-block; justify-self: start; font: inherit; font-size: .74rem; border: 0; background: none; color: var(--accent); padding: 2px 0; cursor: pointer; }
 .list .tk .nx { font-weight: 600; }
 .tg { font-size: .72rem; color: var(--ink-soft); margin: 8px 0 4px; }
@@ -285,7 +291,7 @@ textarea:disabled::placeholder { color: var(--disabled); }
     </div></div>
   </div>
   <aside class="side" aria-label="環境與試試看">
-    <div class="sh"><b>原型控制</b><small>畫面照邏輯延續：下一個指令看的是「現在畫布上有什麼」。切換下面的開關不會清掉對話。</small><button type="button" id="reset" class="rst">重設全部</button></div>
+    <div class="sh"><b>原型控制</b><small>選一個任務照著做，完成會自動打勾。</small><button type="button" id="reset" class="rst">重設全部</button></div>
     <div class="list" id="panel"></div>
   </aside>
 </div>
@@ -717,24 +723,24 @@ const TRY = [
 const has = (type, test) => S.log.some(([t, v]) => t === type && (!test || (typeof test === 'string' ? v === test : test(v))));
 const after = (a, b) => { const i = S.log.findIndex(([t]) => t === a); return i >= 0 && S.log.slice(i + 1).some(([t]) => t === b); };
 const TASKS = [
-  { t: '幫數學課開好小工具', who: '你是數學老師，上課前想一次開好需要的工具。', env: {},
-    steps: [['點建議卡「課堂講解」', () => has('send', '課堂講解')], ['課程類型選「數學」', () => has('pick', '數學')], ['確認要開啟的小工具，按「開啟 N 項」', () => has('mok', 'tools')], ['看畫布：可縮小的收到右上角小視窗', () => S.bg === 'math']],
-    recap: 'AI 先問課程、再列出對應工具讓你勾選；有小視窗的工具會收到右上角，其餘照原始尺寸開在畫布上。' },
-  { t: '把學生的便利貼分群', who: '學生剛貼完 6 張點子，你想讓 AI 依語意整理。', env: { bg: 'stickies' },
-    steps: [['輸入「/classify」送出（打 / 會跳出 Skill 選單）', () => has('send', v => v.startsWith('/classify'))], ['處理時畫布被鎖定、出現「AI 編輯中」', () => has('nav') || ['clsStay', 'clsDone'].includes(S.bg)], ['按「前往查看」開啟新增的分群頁', () => S.bg === 'clsDone']],
-    recap: 'Skill 執行時畫布會鎖住避免誤動；分群結果放在新頁，按「前往查看」才切過去，按鈕會留在對話裡。' },
-  { t: '只更正部分錯字', who: '頁面上的文字有錯字，但其中一個是刻意的用字，不想改。', env: { bg: 'gramBefore' },
-    steps: [['輸入「/grammar-check」送出', () => has('send', v => v.startsWith('/grammar-check'))], ['在列表中取消勾選任一項', () => has('item')], ['按「更正 N 項」', () => has('mok', 'gram5')]],
-    recap: '多選快速回覆預設全選，可以取消個別項目；全不勾時「更正 0 項」會停用。' },
-  { t: '分組後反悔', who: '你幫全班分成 4 組，但發現分錯了想退回。', env: { bg: 'stickies' },
-    steps: [['輸入「/group」送出', () => has('send', v => v.startsWith('/group'))], ['選組數（可按「更多選項」看到 7、8 組）', () => has('pick', v => /組$/.test(v))], ['畫布出現分組區後，按「復原」', () => has('undo')]],
-    recap: '組數超過 5 個會收進「更多選項」；「復原」只出現在最新一則成功回饋，按了畫布會退回上一步。' },
-  { t: '網路斷線時', who: '教室網路不穩，你送出指令後失敗了。', env: { bg: 'stickies', net: 'off' },
-    steps: [['送出「請把這頁的便利貼依顏色分組」', () => has('send', v => /依顏色分組/.test(v))], ['看到紅色錯誤訊息', () => has('err')], ['右側「網路」切回正常', () => has('err') && S.net === 'ok'], ['按「再試一次」，成功後錯誤訊息消失', () => after('retry', 'ok')]],
-    recap: '可重試的錯誤會給「再試一次」；重試成功後錯誤訊息不保留，只留成功結果。' },
-  { t: 'AI 點數用完', who: '這個月的 AI 點數剛好用到最後一次。', env: { quotaMode: 'last' },
-    steps: [['隨便送出一句話（例如「1 加到 10 =」）', () => has('send')], ['輸入框上方出現點數不足提示', () => has('quota')], ['試著再打字：可以打，但送不出去', () => S.quota && S.text.length > 0]],
-    recap: '點數不足時提示固定在輸入框上方；輸入框照常可打字，只有送出停用。' },
+  { t: '開數學課小工具', who: '數學老師，上課前開好工具', env: {},
+    steps: [['點「課堂講解」', () => has('send', '課堂講解')], ['選「數學」', () => has('pick', '數學')], ['按「開啟」', () => has('mok', 'tools')]],
+    recap: '有小視窗的工具收到右上角。' },
+  { t: '便利貼分群', who: '整理學生貼的 6 張點子', env: { bg: 'stickies' },
+    steps: [['送出 /classify', () => has('send', v => v.startsWith('/classify'))], ['按「前往查看」', () => S.bg === 'clsDone']],
+    recap: '處理時畫布鎖定；結果在新頁，按了才切過去。' },
+  { t: '只改部分錯字', who: '有一個字是刻意的，不想改', env: { bg: 'gramBefore' },
+    steps: [['送出 /grammar-check', () => has('send', v => v.startsWith('/grammar-check'))], ['取消勾選一項', () => has('item')], ['按「更正」', () => has('mok', 'gram5')]],
+    recap: '多選預設全選，可個別取消。' },
+  { t: '分組後復原', who: '分錯組了想退回', env: { bg: 'stickies' },
+    steps: [['送出 /group', () => has('send', v => v.startsWith('/group'))], ['選組數', () => has('pick', v => /組$/.test(v))], ['按「復原」', () => has('undo')]],
+    recap: '復原只在最新一則成功回饋上。' },
+  { t: '斷網重試', who: '教室網路不穩', env: { bg: 'stickies', net: 'off' },
+    steps: [['送出「依顏色分組」', () => has('send', v => /依顏色分組/.test(v))], ['網路切回「正常」', () => has('err') && S.net === 'ok'], ['按「再試一次」', () => after('retry', 'ok')]],
+    recap: '重試成功後錯誤訊息不保留。' },
+  { t: '點數用完', who: '最後一次點數', env: { quotaMode: 'last' },
+    steps: [['送出任一句話', () => has('send')], ['再打字看看', () => S.quota && S.text.length > 0]],
+    recap: '可以打字，但送不出去。' },
 ];
 let curTask = -1;
 function startTask(k) {
@@ -744,12 +750,11 @@ function startTask(k) {
 }
 function renderTasks() {
   const box = $('tasks'); if (!box) return;
-  let h = '<h4>測試任務<small>選一個情境，照步驟操作，完成的步驟會自動打勾</small></h4><div class="tasks">';
+  let h = '<h4>測試任務</h4><div class="tasks">';
   TASKS.forEach((tk, k) => {
-    if (k !== curTask) { h += `<button type="button" class="tk" data-task="${k}"><b>${k + 1}. ${tk.t}</b></button>`; return; }
-    const done = tk.steps.map(s => !!s[1]());
-    const all = done.every(Boolean);
-    h += `<div class="tk on"><b>${k + 1}. ${tk.t}</b><p class="who">${tk.who}</p><ol>${tk.steps.map((s, i) => `<li class="${done[i] ? 'ok' : ''}">${s[0]}</li>`).join('')}</ol>${all ? `<p class="recap">✓ 完成！${tk.recap}</p>${k + 1 < TASKS.length ? `<button type="button" class="nx" data-task="${k + 1}">下一個任務 →</button>` : ''}` : ''}<button type="button" class="again" data-task="${k}">↺ 重來</button></div>`;
+    if (k !== curTask) { h += `<button type="button" class="tk" data-task="${k}">${tk.t}</button>`; return; }
+    const done = tk.steps.map(s => !!s[1]()), all = done.every(Boolean);
+    h += `<div class="tk on"><div class="th"><b>${tk.t}</b><button type="button" class="again" data-task="${k}" aria-label="重來">↺</button></div><p class="who">${tk.who}</p><ol>${tk.steps.map((s, i) => `<li class="${done[i] ? 'ok' : ''}">${s[0]}</li>`).join('')}</ol>${all ? `<p class="recap">✓ ${tk.recap}</p>${k + 1 < TASKS.length ? `<button type="button" class="nx" data-task="${k + 1}">下一個 →</button>` : ''}` : ''}</div>`;
   });
   box.innerHTML = h + '</div>';
 }
@@ -771,10 +776,10 @@ function fillTry(t) {
   if (sk) { S.skill = sk[0]; S.skillSel = false; S.text = t.slice(sk[0].length).trim(); } else { S.skill = null; S.text = t; }
   S.menuIdx = 0; render(); const ta = $('ta'); if (ta && !ta.disabled) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
 }
-$('panel').innerHTML = `<div class="sec" id="tasks"></div><div class="sec"><h4>畫布內容</h4><p id="cv"></p><div class="chips">${CANVAS_OPTS.map(([k, n]) => `<button type="button" data-canvas="${k}">${n}</button>`).join('')}</div></div>`
+$('panel').innerHTML = `<div class="sec" id="tasks"></div><details class="adv"><summary>進階：自己切換情境</summary><div class="sec"><h4>畫布內容</h4><p id="cv"></p><div class="chips">${CANVAS_OPTS.map(([k, n]) => `<button type="button" data-canvas="${k}">${n}</button>`).join('')}</div></div>`
   + ENV.map(([key, label, opts]) => `<div class="sec"><h4>${label}</h4><div class="chips">${opts.map(([v, n]) => `<button type="button" data-env="${key}" data-v="${v}">${n}</button>`).join('')}</div></div>`).join('')
   + `<div class="sec"><h4>規格備註</h4><p class="note">小工具開啟規則：有小視窗功能的工具，開啟後預設為小視窗，由畫面右上角往下排列（距右 24、距上 64、間距 16）；沒有小視窗的工具以原始尺寸顯示在預設位置；需要使用者先作決定的工具（如記分板選隊伍數）停在選擇畫面。</p></div>`
-  + `<div class="sec"><h4>試試看<small>點了會填進輸入框，按 Enter 送出</small></h4>${TRY.map(([g, l]) => `<div class="tg">${g}</div><div class="tries">${l.map(t => `<button type="button" data-try="${esc(t)}">${esc(t)}</button>`).join('')}</div>`).join('')}</div>`;
+  + `<div class="sec"><h4>試試看<small>點了會填進輸入框，按 Enter 送出</small></h4>${TRY.map(([g, l]) => `<div class="tg">${g}</div><div class="tries">${l.map(t => `<button type="button" data-try="${esc(t)}">${esc(t)}</button>`).join('')}</div>`).join('')}</div></details>`;
 $('panel').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
   if (b.dataset.task != null) return startTask(+b.dataset.task);
