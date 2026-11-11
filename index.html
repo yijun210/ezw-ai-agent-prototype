@@ -19,9 +19,8 @@
   --red1: #feede9; --red: #d71a09; --violet: #713dff; --violet2: #efe8ff; --muted: #8f9090;
   --cjk: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
   --latin: "Roboto", "Noto Sans TC", sans-serif;
+  color-scheme: light;
 }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --page: #15171d; --panel: #1f222b; --ink: #eceef4; --ink-soft: #a4a9b8; --rule: #2f3341; color-scheme: dark; } }
-:root[data-theme="dark"] { --page: #15171d; --panel: #1f222b; --ink: #eceef4; --ink-soft: #a4a9b8; --rule: #2f3341; color-scheme: dark; }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--page); color: var(--ink); font-family: var(--cjk); }
 .wrap { max-width: 1760px; margin: 0 auto; padding-block: 20px 40px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; grid-template-columns: minmax(0,1fr) 300px; gap: 20px; align-items: start; }
@@ -56,6 +55,15 @@ body { margin: 0; background: var(--page); color: var(--ink); font-family: var(-
 .stage *::-webkit-scrollbar-track { background: #fff; border-radius: 4px; }
 .stage *::-webkit-scrollbar-thumb { background: #8f9090; border-radius: 4px; border: 1px solid #fff; }
 .stage *::-webkit-scrollbar-corner { background: #fff; }
+/* 依參數即時畫出的畫布結果（組數版型、改色），疊在底圖上 */
+#ov { position: absolute; inset: 0; pointer-events: none; }
+#ov.in { animation: ovIn .8s ease both; }
+@keyframes ovIn { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { #ov.in { animation: none; } }
+.gcell { position: absolute; border: 1px solid #a9a9a9; border-radius: 12px; }
+.gcell span { position: absolute; left: 24px; top: 24px; height: 58px; padding: 0 20px; border-radius: 29px; background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,.12); font: 500 32px/58px var(--cjk); color: #424242; white-space: nowrap; }
+.sbmin { position: absolute; left: 1666px; top: 64px; width: 230px; height: 64px; border-radius: 8px; background: url(img/groupTeam.jpg) -1666px -64px / 1920px 1080px no-repeat; box-shadow: 0 2px 8px rgba(0,0,0,.14); }
+.tint { position: absolute; }
 .ai-hot { position: absolute; left: 445px; top: 990px; width: 60px; height: 60px; border-radius: 50%; border: 0; background: transparent; cursor: pointer; }
 /* 底圖烤進了藍色外圈：default 用白邊蓋掉，只有滑鼠 hover 時才露出藍圈；點開後滑鼠移開即消失 */
 .ai-hot::before { content: ""; position: absolute; inset: -3px; border-radius: 50%; border: 12px solid #fff; transition: opacity .15s; pointer-events: none; }
@@ -87,6 +95,7 @@ body { margin: 0; background: var(--page); color: var(--ink); font-family: var(-
 /* 選取／額度提示浮在輸入框上方，不擠壓對話區，首頁內容不會跟著上移 */
 .foot .hints { position: absolute; left: 24px; right: 24px; bottom: 100%; display: flex; flex-direction: column; gap: 8px; z-index: 1; }
 .col.has-hint { padding-bottom: 80px; }
+.col.has-hint.two { padding-bottom: 136px; }
 .disc { text-align: center; font-size: 12px; line-height: 14px; color: var(--hint); }
 
 .welcome { display: flex; flex-direction: column; align-items: center; gap: 12px; }
@@ -183,7 +192,7 @@ textarea:disabled::placeholder { color: var(--disabled); }
 .round { width: 48px; height: 48px; border: 0; padding: 0; background: none; border-radius: 50%; cursor: pointer; display: block; }
 .round svg { display: block; }
 .round:disabled { cursor: default; }
-.menu { position: absolute; left: 0; bottom: calc(100% + 16px); width: 432px; height: 380px; background: #fff; border-radius: 16px; box-shadow: 0 4px 16px rgba(0,0,0,.18); padding: 16px 0; display: flex; flex-direction: column; gap: 8px; }
+.menu { position: absolute; left: 0; bottom: calc(100% + 16px); width: 432px; height: 380px; background: #fff; border-radius: 16px; box-shadow: 0 4px 16px rgba(0,0,0,.18); padding: 16px 0; display: flex; flex-direction: column; gap: 8px; z-index: 2; }
 .menu.short { height: auto; }
 .menu .mh { padding-left: 24px; font: 400 16px/19px var(--cjk); color: var(--hint); }
 .menu .ml { overflow-y: auto; scrollbar-width: thin; }
@@ -254,6 +263,36 @@ textarea:disabled::placeholder { color: var(--disabled); }
 .list .tk .again { padding: 0 4px; font-size: .9rem; }
 .list .tk .nx, .list .tk .again { display: inline-block; justify-self: start; font: inherit; font-size: .74rem; border: 0; background: none; color: var(--accent); padding: 2px 0; cursor: pointer; }
 .list .tk .nx { font-weight: 600; }
+.list .tk .th .again { display: grid; grid-template-columns: 1fr; place-items: center; width: 28px; height: 28px; padding: 0; margin: -4px -4px -4px 0; border-radius: 50%; color: var(--ink-soft); }
+.list .tk .th .again:hover { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+.list .tk .th .again svg { display: block; }
+/* 動畫規格分頁：每張卡上方是實際動畫（沿用原型同一組 class），下方是數值 */
+.tools .tabs button { border: 0; padding: 6px 16px; white-space: nowrap; }
+#motionView { display: none; grid-column: 1 / -1; grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr)); gap: 16px; }
+.wrap.motion #motionView { display: grid; }
+.wrap.motion .stagecol, .wrap.motion .side, .wrap.motion #fs, .wrap.motion .howto { display: none; }
+.wrap:not(.motion) .mintro { display: none; }
+.mcard { background: var(--panel); border: 1px solid var(--rule); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; }
+.mdemo { position: relative; height: 250px; overflow: hidden; display: grid; place-items: center; background: linear-gradient(180deg, #fff 0%, #f9f9f9 100%); color: var(--text); color-scheme: light; font-family: var(--cjk); border-bottom: 1px solid var(--rule); }
+.mdemo.cv { background: #d9d9d9; }
+.mdemo .in { width: 480px; zoom: .7; display: flex; flex-direction: column; gap: 16px; padding: 0 24px; }
+.mdemo .in0 { width: 480px; zoom: .58; }
+.mdemo .in0 .col { min-height: 0; }
+.mdemo .in0.full { height: 400px; }
+.mdemo .in0.full .col { min-height: 100%; }
+.mdemo .tip { position: absolute; left: 0; right: 0; bottom: 14px; text-align: center; font-size: .74rem; color: #5e6372; }
+.mhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 14px 2px; }
+.mhead b { font-size: .95rem; }
+.mhead small { font-size: .74rem; color: var(--ink-soft); }
+.mspec { margin: 0; padding: 6px 14px 14px; display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: .8rem; line-height: 1.5; }
+.mspec dt { color: var(--ink-soft); white-space: nowrap; }
+.mspec dd { margin: 0; color: var(--ink); }
+.mspec code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .76rem; color: var(--accent); overflow-wrap: anywhere; }
+.mtier { grid-column: 1 / -1; margin-top: 8px; }
+.mtier:first-child { margin-top: 0; }
+.mtier h2 { margin: 0; font-size: 1.05rem; }
+.mtier p { margin: 2px 0 0; font-size: .82rem; color: var(--ink-soft); }
+.mnote { grid-column: 1 / -1; margin: 0; font-size: .8rem; color: var(--ink-soft); }
 .tg { font-size: .72rem; color: var(--ink-soft); margin: 8px 0 4px; }
 /* 情境清單 */
 .side { background: var(--panel); border: 1px solid var(--rule); border-radius: 12px; display: flex; flex-direction: column; max-height: calc(100vh - 40px); position: sticky; top: 20px; }
@@ -271,25 +310,26 @@ textarea:disabled::placeholder { color: var(--disabled); }
 .list button.flag::after { content: "原型補"; grid-column: 2; font-size: .68rem; color: #b45309; }
 @media (prefers-reduced-motion: reduce) { .spark, .shimmer, .cursor { animation-duration: 4s; } }
 </style>
-
 </head>
 <body>
-<div class="wrap">
+<div class="wrap" id="wrap">
   <div class="top">
     <div>
       <h1>EZWrite6 AI Agent 精稿原型</h1>
-      <p>直接在 AI 視窗裡操作：輸入「/」用 Skill、點建議卡、回覆快速選項。畫布和對話會延續，復原會退回上一步畫布，開新對話會存進對話紀錄。右側可切換畫布內容、點數、網路狀態來看不同反應。畫布為 Figma 匯出底圖，AI 視窗照 Figma 尺寸重刻。</p>
+      <p class="mintro">元素動畫規格：每張卡片上方是實際動畫，下方是實作數值，請照數值實作。訊息進場、畫面切換等過渡請直接看「原型」分頁的感覺。</p>
+      <p class="howto">① 在 AI 視窗輸入「/」選 Skill，或直接打字、點建議卡。<br>② 想照情境走一遍，選右側的「測試任務」。<br>③ 想自己換畫布、點數或網路狀態，展開右側的「進階」。<br>※ 這是 Prototype，主要用來感受動畫與轉場，不包含所有功能。</p>
     </div>
-    <div class="tools"><button type="button" id="fs">全螢幕</button></div>
+    <div class="tools"><div class="tabs" id="vt"><button type="button" data-view="proto" aria-pressed="true">原型</button><button type="button" data-view="motion" aria-pressed="false">動畫規格</button></div><button type="button" id="fs">全螢幕</button></div>
   </div>
-  <div>
+  <div class="stagecol">
     <div class="outer" id="outer"><div class="stage" id="stage">
-      <img class="bg" id="bg" alt="" src="img/base.jpg"><img class="bg" id="bg2" alt="" style="opacity:0"><div class="sweep" id="sweep" hidden></div>
+      <img class="bg" id="bg" alt="" src="img/base.jpg"><img class="bg" id="bg2" alt="" style="opacity:0"><div id="ov"></div><div class="sweep" id="sweep" hidden></div>
       <button class="ai-hot" id="aiHot" type="button" aria-label="開關 AI 視窗"></button>
       <section class="win" id="win" aria-label="EZWrite6 Agent"></section>
       <div id="layer"></div>
     </div></div>
   </div>
+  <div id="motionView"></div>
   <aside class="side" aria-label="環境與試試看">
     <div class="sh"><b>原型控制</b><small>選一個任務照著做，完成會自動打勾。</small><button type="button" id="reset" class="rst">重設全部</button></div>
     <div class="list" id="panel"></div>
@@ -388,11 +428,39 @@ const fresh = () => ({ bg: 'base', winX: 16, open: true, view: 'chat', msgs: [],
   menuIdx: 0, more: null, hist: seedHist(), chatRef: null, quotaMode: 'ok', net: 'ok', nextErr: null, histMenu: null, histHover: null, dialog: false, anchor: null, scrollTop: false, await: null, log: [] });
 const L = (type, v) => { S.log.push([type, v == null ? '' : String(v)]); };
 
+/* ---------- 合成畫布：底圖＋依參數畫出的結果 ---------- */
+const COLORS = ['灰','白','藍','綠','黃','橘','粉紅','紫'];
+const HEX = { '灰': '#d5d9e0', '白': '#f7f7f7', '藍': '#90e2ff', '綠': '#c0f56c', '黃': '#fff480', '橘': '#ffc9a3', '粉紅': '#fcaeed', '紫': '#d3b8ff' };
+const GROUP_FILL = ['#dfe2e7','#fffbc8','#ffffff','#fddcc8','#d9f0fb','#e3f7c6','#fbdcf3','#e6dcfb'];
+const NUM = ['一','二','三','四','五','六','七','八'];
+function groupsHTML(n, team) {
+  const cols = n <= 3 ? n : Math.ceil(n / 2), rows = n <= 3 ? 1 : 2, gap = 16;
+  const w = (1840 - gap * (cols - 1)) / cols, h = (920 - gap * (rows - 1)) / rows;
+  let h2 = '';
+  for (let k = 0; k < n; k++) h2 += `<div class="gcell" style="left:${40 + (k % cols) * (w + gap)}px;top:${40 + Math.floor(k / cols) * (h + gap)}px;width:${w}px;height:${h}px;background:${GROUP_FILL[k]}"><span>第${NUM[k]}組</span></div>`;
+  return h2 + (team ? '<div class="sbmin"></div>' : '');
+}
+function view(bg) {
+  let m;
+  if ((m = /^grp(T?)(\d)$/.exec(bg))) return { img: 'base', ov: groupsHTML(+m[2], !!m[1]) };
+  if ((m = /^selC(.+)$/.exec(bg))) return { img: 'sel', ov: [[822,381],[1052,381]].map(([x, y]) => `<div class="tint" style="left:${x}px;top:${y}px;width:200px;height:200px;background:${HEX[m[1]]}"></div>`).join('') };
+  if ((m = /^stkC(.+)$/.exec(bg))) return { img: 'stickies', ov: [[1061,263],[823,501]].map(([x, y]) => `<div class="tint" style="left:${x}px;top:${y}px;width:200px;height:197px;background:${HEX[m[1]]};mix-blend-mode:multiply"></div>`).join('') };
+  return { img: bg, ov: '' };
+}
+let ovKey = null;
+
+// 新訊息進場時，既有訊息不瞬間跳位：先放回原位再滑到新位置（與訊息進場同時間、同曲線）
+function slideUp(els, d) {
+  if (!(d > 0 && d < 600) || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  els.forEach(el => { el.style.transform = `translateY(${d}px)`; el.getBoundingClientRect(); el.style.transition = 'transform .32s cubic-bezier(.2,.8,.2,1)'; el.style.transform = ''; });
+}
+
 /* ---------- 視窗渲染 ---------- */
 let render = function () {
   if (composing) { renderPending = true; return; }
   // 畫布狀態切換：舊圖疊在上層淡出，避免結果瞬間跳出
-  const nextSrc = `img/${S.bg}.jpg`;
+  const V = view(S.bg), nextSrc = `img/${V.img}.jpg`;
+  if (ovKey !== S.bg) { const ov = $('ov'); ov.innerHTML = V.ov; ov.classList.remove('in'); if (V.ov && !S.instant && ovKey !== null) { void ov.offsetWidth; ov.classList.add('in'); } ovKey = S.bg; }
   if (!bgEl.src.endsWith(nextSrc)) {
     const bg2 = $('bg2');
     if (S.instant || matchMedia('(prefers-reduced-motion: reduce)').matches) { bg2.style.transition = 'none'; bg2.style.opacity = 0; }
@@ -411,7 +479,7 @@ let render = function () {
   let h = '';
   if (S.view === 'chat') {
     h += `<div class="head"><button class="ib" type="button" data-act="more" aria-label="更多">${IC.more}</button><h2>EZWrite6 Agent</h2><button class="ib" type="button" data-act="close" aria-label="關閉">${IC.close}</button></div>`;
-    h += `<div class="content" id="content"><div class="col ${S.msgs.length ? (renderHints() ? 'has-hint' : '') : 'welcome-mode'}" id="col">${S.msgs.length ? S.msgs.map((m, i) => m._shown ? renderMsg(m, i) : renderMsg(m, i).replace('class="', 'class="enter ')).join('') : renderWelcome()}<div id="tail"></div></div></div>`;
+    h += `<div class="content" id="content"><div class="col ${S.msgs.length ? (h => h ? ((h.match(/class="hint /g) || []).length > 1 ? 'has-hint two' : 'has-hint') : '')(renderHints()) : 'welcome-mode'}" id="col">${S.msgs.length ? S.msgs.map((m, i) => m._shown ? renderMsg(m, i) : renderMsg(m, i).replace('class="', 'class="enter ')).join('') : renderWelcome()}<div id="tail"></div></div></div>`;
     h += renderFoot();
     if (S.more) h += `<div class="dd" style="left:16px;top:58px;width:200px"><button type="button" data-act="newchat">新對話</button><button type="button" data-act="history">對話紀錄</button><div class="q">AI 點數額度<small>${S.more === 'low' ? '2,400' : '3,000'} / 15,000 點可用</small>${S.more === 'low' ? '<small class="warn">點數即將用完</small>' : ''}</div></div>`;
   } else {
@@ -422,6 +490,7 @@ let render = function () {
     else S.hist.forEach(([g, l], gi) => { if (!l.length) return; h += `<div class="glabel">${g}</div>`; l.forEach((t, i) => { const k = gi + ':' + i; h += `<div class="hi ${S.histHover === k || S.histMenu === k ? 'hov' : ''}" data-hk="${k}" data-act="hopen" data-k="${k}"><span>${esc(t.title)}</span><button class="ib" type="button" data-act="hmenu" data-k="${k}" aria-label="更多">${IC.more}</button>${S.histMenu === k ? `<div class="dd" style="right:-4px;top:48px;width:180px"><button type="button" class="del" data-act="hdel" data-k="${k}">刪除</button></div>` : ''}</div>`; }); });
     h += `</div></div>`;
   }
+  const oc = $('col'), o0 = oc && content && S.view === 'chat' && !oc.classList.contains('welcome-mode') && oc.firstElementChild && oc.firstElementChild.id !== 'tail' ? oc.firstElementChild.offsetTop - content.scrollTop : null;
   win.innerHTML = h;
   S.msgs.forEach(m => { m._shown = true; });
   if (S.welcomeIn) { win.querySelector('.welcome-mode')?.classList.add('w-in'); S.welcomeIn = false; }
@@ -440,6 +509,8 @@ let render = function () {
     // 出現捲軸時扣掉捲軸寬度，讓訊息右緣與下方提示、輸入框右緣對齊
     const col = $('col'), sb = c.offsetWidth - c.clientWidth;
     if (col && S.view === 'chat') col.style.paddingRight = Math.max(0, 24 - sb) + 'px';
+    if (o0 != null && col && S.view === 'chat' && S.anchor == null && col.querySelector('.enter') && col.firstElementChild.id !== 'tail')
+      slideUp([...col.children].filter(el => !el.classList.contains('enter') && el.id !== 'tail'), o0 - (col.firstElementChild.offsetTop - c.scrollTop));
   }
 }
 function updScrollBtn() {
@@ -455,9 +526,9 @@ function renderWelcome() {
 }
 function renderHints() {
   let h = '';
-  const selN = { sel: 3, cls2: 2, clsBefore: 6, clsStay: 6 }[S.bg];
+  const selN = /^selC/.test(S.bg) ? 3 : { sel: 3, cls2: 2, clsBefore: 6, clsStay: 6 }[S.bg];
   if (selN) h += `<div class="hint sel">${IC.selIcon}<span>${selN} 個物件被選取</span><span class="sp"></span><button class="x" type="button" data-act="clearsel" aria-label="取消選取">${IC.x28}</button></div>`;
-  if (S.quota && !S.msgs.length) h += quotaHint();
+  if (S.quota) h += quotaHint();
   return h;
 }
 function renderFoot() {
@@ -485,7 +556,7 @@ function renderMsg(m, i) {
   switch (m.t) {
     case 'u': return `<div class="u">${esc(m.text)}</div>`;
     case 'a': return `<div class="a">${esc(m.text)}${m.cursor ? '<span class="cursor"></span>' : ''}</div>`;
-    case 'quota': return quotaHint();
+    case 'quota': return '';
     case 'status': return `<div class="status">${IC.spark}<span class="shimmer">${m.text}</span></div>`;
     case 'plan': return `<div class="plan"><div class="task"><div class="tr">${IC.spark}<b>${m.title}</b><small>${m.prog || (Math.min(m.cur + 1, m.steps.length) + '/' + m.steps.length)}</small></div><div class="st shimmer">正在執行任務</div></div><hr><ol>${m.steps.map((s, k) => `<li class="${k === m.cur ? 'cur' : ''}">${k < m.cur ? IC.stepDone : k === m.cur ? IC.stepCur : IC.stepTodo}<span>${s}</span></li>`).join('')}</ol></div>`;
     case 'ok': return `<div class="r"><div class="msg">${m.text}</div>${m.undo ? `<div class="acts"><button class="btn" type="button" data-act="undo" data-i="${i}">復原</button></div>` : ''}</div>`;
@@ -499,7 +570,7 @@ function renderMsg(m, i) {
       if (!live) return `<div class="a">${m.text}</div>`;
       const n = m.on.filter(Boolean).length, all = n === m.items.length;
       return `<div class="r"><div class="msg">${m.text}</div><div class="items"><div class="it all"><span class="l" data-act="all" data-i="${i}"><span class="chk" role="checkbox" aria-checked="${all ? 'true' : n ? 'mixed' : 'false'}" tabindex="0" data-act="all" data-i="${i}">${all ? IC.chkOn : n ? IC.chkMid : IC.chkOff}</span>全選</span><button class="lk plain" type="button" data-act="all" data-i="${i}">${all ? '取消全選' : '全選'}</button></div>${m.items.map((it, k) => `<div class="it" data-act="item" data-i="${i}" data-k="${k}"><span class="chk" role="checkbox" aria-checked="${m.on[k]}" tabindex="0" data-act="item" data-i="${i}" data-k="${k}">${m.on[k] ? IC.chkOn : IC.chkOff}</span><span>${it}</span></div>`).join('')}</div><div class="acts end"><button class="btn" type="button" data-act="mcancel" data-i="${i}">取消</button><button class="btn pri" type="button" data-act="mok" data-i="${i}" ${n ? '' : 'disabled'}>${m.verb} ${n} 項</button></div></div>`; }
-    case 'corr': return `<div class="r"><div class="msg">${m.text}</div>${live ? `<div class="msg">建議你可以改畫：</div><div class="acts stack">${m.opts.map(o => `<button class="btn" type="button" data-act="pick" data-i="${i}" data-v="${o}">${o}</button>`).join('')}</div>` : ''}</div>`;
+    case 'corr': return `<div class="r"><div class="msg">${m.text}</div>${live ? `<div class="msg">${m.lead || '建議你可以改畫：'}</div><div class="acts stack">${m.opts.map(o => `<button class="btn" type="button" data-act="pick" data-i="${i}" data-v="${o}">${o}</button>`).join('')}</div>` : ''}</div>`;
     case 'err': return `<div class="r err"><div class="emsg">${IC.err}<span>${m.text}</span></div>${m.blocked ? '' : `<div class="acts"><button class="btn" type="button" data-act="retry" data-i="${i}">再試一次</button></div>`}</div>`;
   }
   return '';
@@ -550,7 +621,7 @@ function send(text, skill, noAnim) {
   L('send', full);
   S.msgs.push({ t: 'u', text: full }); S.anchor = overflow ? S.msgs.length - 1 : null;
   render();
-  if (S.quotaMode === 'last') { S.quotaMode = 'empty'; S.quota = true; push({ t: 'quota' }); L('quota'); return; }
+  if (S.quotaMode === 'last') { S.quotaMode = 'empty'; S.quota = true; L('quota'); render(); return; }
   route(full);
 }
 // 畫布上有什麼：指令依此判斷能不能做、做完換成哪張畫布
@@ -559,8 +630,9 @@ const CAP = {
   bulkLocked: { stickies: 6, pink: 2, locked: true }, cls2: { stickies: 2, selected: 2 }, gramBefore: { text: true }, gramDone: { text: true },
   attBefore: { links: 6 }, attDone: { pages: 3 }, attStay: { links: 6, pages: 3 }, clsStay: { stickies: 6 }, brainDone: { stickies: 8 }, clsDone: { stickies: 6 }, sumDone: { stickies: 6 }, groupDone: { groups: 4 }, groupTeam: { groups: 4 },
   court: {}, math: {}, sci: {}, chi: {}, eng: {}, quiz: {}, team: {}, split: {} };
-const cap = () => CAP[S.bg] || {};
-const reply = (ms, m) => think(ms, () => { if (m && m.t === 'err') L('err', m.text); S.msgs.push(typeof m === 'string' ? { t: 'a', text: m } : m); });
+const CN = { '一': 1, '二': 2, '兩': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9, '十': 10 };
+const cap = () => CAP[S.bg] || (/^grp/.test(S.bg) ? { groups: +S.bg.slice(-1) } : /^selC/.test(S.bg) ? { stickies: 3, selected: 3 } : /^stkC/.test(S.bg) ? { stickies: 6 } : {});
+const reply = (ms, m, code) => think(ms, () => { if (m && m.t === 'err') L('err', m.text); if (code) L('limit', code); if (m && m.t === 'confirm') L('confirm'); S.msgs.push(typeof m === 'string' ? { t: 'a', text: m } : m); });
 function route(full) {
   const [cmd, ...rest] = full.split(' '); const arg = rest.join(' ').trim(); const c = cap();
   if (/不適宜|髒話/.test(full)) return reply(900, { t: 'err', text: '偵測到不適宜內容，已由內容守門員封鎖。', blocked: true });
@@ -569,12 +641,13 @@ function route(full) {
   if (S.await === 'topic' && !full.startsWith('/')) { S.await = null; return brain(); }
   if (cmd === '/group') {
     if (!arg) return reply(700, { t: 'single', text: '您要建立幾個隊伍？', opts: GROUPS, kind: 'group' });
-    const n = parseInt(arg, 10); if (!(n >= 2 && n <= 8) || String(n) !== arg.replace(/\s*組$/, '')) return reply(700, '請輸入組數（2–8）。');
+    const raw = arg.replace(/\s*(組|隊)$/, ''), n = CN[raw] ?? (/^\d+$/.test(raw) ? +raw : NaN);
+    if (!(n >= 2 && n <= 8)) return reply(700, '請輸入組數（2–8）。', 'group');
     return doGroup(n);
   }
   if (cmd === '/classify') {
     if (!c.stickies) return reply(700, '頁面上沒有便利貼可以分群。');
-    if (c.stickies < 3) return reply(700, '需選取 3 個以上的便利貼才能執行分群。');
+    if (c.stickies < 3) return reply(700, '需選取 3 個以上的便利貼才能執行分群。', 'classify');
     return plan({ title: '便利貼分群', steps: [`分析 ${c.stickies} 張便利貼的語意`,'產生分群標題','新增一頁並排列分群'], lock: 'stickLock', done: b => { S.bg = 'clsStay'; S.msgs.push({ t: 'nav', text: '已依語意將便利貼完成分群排列。', target: 'clsDone' }); } });
   }
   if (cmd === '/summarize') {
@@ -597,30 +670,44 @@ function route(full) {
   if (full === '小組討論') return reply(700, { t: 'single', text: '要建立幾個小組？', opts: GROUPS, kind: 'team' });
   if (/分割畫布/.test(full)) return reply(700, { t: 'single', text: '您要開啟幾分割畫布？', opts: ['2 格','3 格'], short: true, kind: 'split' });
   if (/籃球場/.test(full)) return think(1200, () => { const b = S.bg; S.bg = 'court'; ok('沒問題，已換成籃球場的背景圖。', b); });
-  if (/錯別字/.test(full)) return think(1100, () => c.text ? route('/grammar-check') : plan({ title: '檢查錯別字', steps: ['讀取頁面上的文字框與便利貼','比對錯字與文法','列出需要更正的項目'], done: () => S.msgs.push({ t: 'multi', text: '檢查發現了 2 個錯別字，需要更正哪些？', items: TYPO2, on: [true, true], verb: '更正', kind: 'gram2' }) }));
+  if (/錯別字|錯字|文法|校對/.test(full)) return think(1100, () => c.text ? route('/grammar-check') : plan({ title: '檢查錯別字', steps: ['讀取頁面上的文字框與便利貼','比對錯字與文法','列出需要更正的項目'], done: () => S.msgs.push({ t: 'multi', text: '檢查發現了 2 個錯別字，需要更正哪些？', items: TYPO2, on: [true, true], verb: '更正', kind: 'gram2' }) }));
   if (/^1 ?加到 ?10/.test(full)) return reply(900, SUM1);
   if (/整理.*重點/.test(full)) return c.stickies ? think(900, () => stream(LONG)) : reply(800, '頁面上沒有便利貼可以整理。');
   if (/畢氏/.test(full)) return think(900, () => stream(PYTH));
   if (/餘弦/.test(full)) return think(900, () => stream(COS));
   if (/三角形/.test(full)) return reply(900, { t: 'corr', text: '我目前只支援繪製「等腰三角形」與「直角三角形」，因此無法繪製 80°-60°-40° 的不等邊三角形。', opts: ['等腰三角形 80°-50°-50°','直角三角形 90°-60°-30°','直角三角形 90°-45°-45°'] });
   if (/依顏色分組/.test(full)) return c.stickies ? think(900, () => plan({ title: '依顏色分組便利貼', steps: ['讀取便利貼顏色','分成 4 組並排列','完成並回報結果'], done: () => ok('已依顏色將便利貼分成 4 組。', S.bg) })) : reply(800, '頁面上沒有便利貼可以分組。');
-  return reply(800, '我目前還不會處理這個要求，可以試試右側「試試看」的指令。');
+  // 換個說法也聽得懂：口語對應到同一個 Skill，限制與前置條件照 Skill 規則判斷
+  const g = full.match(/分成?\s*(\d+|[一二兩三四五六七八九十])\s*個?小?(?:組|隊)/);
+  if (g) return route('/group ' + (CN[g[1]] ?? g[1]));
+  if (/分組/.test(full)) return route('/group');
+  if (/分群|分類|歸類/.test(full)) return route('/classify');
+  if (/摘要|總結|歸納/.test(full)) return route('/summarize');
+  if (/連結|附件/.test(full)) return route('/attachment');
+  if (/把.+(改成|換成|變成)/.test(full)) return bulk(full);
+  if (/小工具|上課/.test(full)) return route('課堂講解');
+  return reply(800, { t: 'corr', text: '我目前還不會處理這個要求。', lead: '你可以試試：', opts: SUGS.map(s => s[0]), kind: 'sug' }, 'unknown');
 }
 function bulk(arg) {
-  const c = cap();
-  if (!arg || !/把.+改成.+/.test(arg)) return reply(700, BULK_ERR[4][2]);
-  if (/粗體|字體|大小|旋轉|對齊/.test(arg)) return reply(700, BULK_ERR[0][2]);
-  if (/圖片|檔案/.test(arg)) return reply(700, BULK_ERR[1][2]);
-  if (/彩虹|漸層|透明/.test(arg)) return reply(700, BULK_ERR[3][2]);
-  const m = arg.match(/把(.+?)色?(便利貼|筆跡|文字|幾何圖形|物件).*改成(.+?)色?$/);
-  if (!m) return reply(700, BULK_ERR[4][2]);
-  const from = m[1].replace(/色$/, ''), obj = m[2], to = m[3].replace(/色$/, '');
-  if (!(from === '粉紅' && obj === '便利貼' && c.pink)) return reply(700, `找不到${from}色${obj}，請換個條件試試。`);
+  const c = cap(), lim = (k, code) => reply(700, BULK_ERR[k][2], code);
+  const m = arg && arg.match(/把(.+?)(?:改成|換成|變成)(.+)$/);
+  if (!m) return lim(4, 'bulk-incomplete');
+  const subj = m[1].trim(), tgt = m[2].trim().replace(/[。.！!]$/, ''), to = tgt.replace(/色$/, '');
+  // 只支援改顏色，且限 8 種基礎色
+  if (!COLORS.includes(to)) return /色$|彩虹|漸層|透明|紅|黑|金|銀|棕|咖啡/.test(tgt) ? lim(3, 'bulk-color') : lim(0, 'bulk-action');
+  const om = subj.match(/便利貼|筆跡|文字|幾何圖形|物件/);
+  if (!om) return lim(1, 'bulk-object');
+  const obj = om[0], from = subj.slice(0, om.index).replace(/的$/, '').replace(/色$/, '');
+  if (obj === '物件') {
+    if (!/^sel/.test(S.bg)) return reply(700, '目前沒有選取任何物件，請先選取後再試一次。', 'bulk-none');
+    return plan({ title: '批次修改顏色', steps: ['檢查 3 個選取物件', `更新為${to}色`, '完成並回報結果'], done: b => { S.bg = 'selC' + to; L('partial'); ok(`已將 2 個物件更新為${to}色（已略過 1 個不支援或鎖定的物件）。`, b); } });
+  }
+  if (!(from === '粉紅' && obj === '便利貼' && c.pink)) return reply(700, `找不到${from ? from + '色' : ''}${obj}，請換個條件試試。`, 'bulk-none');
   if (c.locked) return reply(700, { t: 'confirm', text: CONFIRM_T, to });
-  return plan({ title: '批次修改顏色', steps: [`找出粉紅色便利貼（${c.pink} 張）`,`更新為${to}色`,'完成並回報結果'], lock: 'bulkLock', done: b => { S.bg = 'stickies'; ok(`已將 ${c.pink} 張便利貼更新為${to}色。`, b); } });
+  return plan({ title: '批次修改顏色', steps: [`找出粉紅色便利貼（${c.pink} 張）`,`更新為${to}色`,'完成並回報結果'], lock: 'bulkLock', done: b => { S.bg = to === '白' ? 'stickies' : 'stkC' + to; ok(`已將 ${c.pink} 張便利貼更新為${to}色。`, b); } });
 }
 function doGroup(n, team) {
-  plan({ title: `建立 ${n} 組討論區`, steps: [`均分畫布為 ${n} 區`,'加上組別標題','鎖定組別區塊'], lock: S.bg === 'stickies' ? 'stickLock' : null, done: b => { S.bg = team ? 'groupTeam' : 'groupDone'; ok(team ? `已建立 ${n} 組討論區塊，並開啟記分板。` : `已成功劃分 ${n} 組討論區塊。`, b); } });
+  plan({ title: `建立 ${n} 組討論區`, steps: [`均分畫布為 ${n} 區`,'加上組別標題','鎖定組別區塊'], lock: S.bg === 'stickies' ? 'stickLock' : null, done: b => { S.bg = team ? (n === 3 ? 'groupTeam' : 'grpT' + n) : (n === 4 ? 'groupDone' : 'grp' + n); ok(team ? `已建立 ${n} 組討論區塊，並開啟記分板。` : `已成功劃分 ${n} 組討論區塊。`, b); } });
 }
 function brain() {
   plan({ title: '建立腦力激盪', steps: ['建立主題文字框','新增便利貼','排列並對齊便利貼'], lock: 'brainLock', prog: k => `${Math.min(k + 1, 3)}/3`, done: b => { S.bg = 'brainDone'; ok('已建立腦力激盪主題，並新增 8 張便利貼。', b); } });
@@ -683,13 +770,14 @@ document.addEventListener('click', e => {
     case 'exp': m.exp = !m.exp; render(); return;
     case 'pick': {
       if (S.busy) return; const v = t.dataset.v; L('pick', v); m.answered = true; S.msgs.forEach(x => { if (x.t === 'ok') x.undo = false; });
+      if (m.kind === 'sug') { S.msgs.push({ t: 'u', text: v }); render(); return route(v); }
       if (m.kind === 'group') { S.msgs.push({ t: 'u', text: v }); render(); return doGroup(parseInt(v, 10)); }
       if (m.kind === 'team') { S.msgs.push({ t: 'u', text: v }); render(); return doGroup(parseInt(v, 10), true); }
       if (m.kind === 'course') { S.msgs.push({ t: 'u', text: COURSE_USER[v] || v }); render(); return think(700, () => S.msgs.push({ t: 'multi', text: '要開啟哪些小工具？', items: TOOLS[v], on: TOOLS[v].map(() => true), verb: '開啟', kind: 'tools', course: v })); }
       if (m.kind === 'split') { S.msgs.push({ t: 'u', text: v }); render(); return think(900, () => { S.bg = 'split'; S.winX = 112; ok(v === '3 格' ? '已開啟三分割畫布。' : '已開啟二分割畫布。', 'stickies'); }); }
       S.msgs.push({ t: 'u', text: v }); render(); return think(900, () => ok(`已繪製${v}。`, S.bg));
     }
-    case 'cyes': { m.answered = true; const to = m.to || '白'; S.msgs.push({ t: 'u', text: '確定' }); render(); return plan({ title: '批次修改顏色', steps: ['解除 2 張便利貼的鎖定',`更新為${to}色`,'完成並回報結果'], lock: 'bulkLock', done: b => { S.bg = 'stickies'; ok(`已解除鎖定，並將 2 張便利貼更新為${to}色。`, b); } }); }
+    case 'cyes': { L('cyes'); m.answered = true; const to = m.to || '白'; S.msgs.push({ t: 'u', text: '確定' }); render(); return plan({ title: '批次修改顏色', steps: ['解除 2 張便利貼的鎖定',`更新為${to}色`,'完成並回報結果'], lock: 'bulkLock', done: b => { S.bg = to === '白' ? 'stickies' : 'stkC' + to; ok(`已解除鎖定，並將 2 張便利貼更新為${to}色。`, b); } }); }
     case 'cno': m.answered = true; S.msgs.push({ t: 'u', text: '取消' }); render(); return;
     case 'item': L('item'); m.on[+t.dataset.k] = !m.on[+t.dataset.k]; render(); return;
     case 'all': { const all = m.on.every(Boolean); m.on = m.on.map(() => !all); render(); return; }
@@ -711,14 +799,21 @@ win.addEventListener('wheel', () => { if (S.anchor != null) { S.anchor = null; c
 /* ---------- 右側：環境開關＋試試看（不會重設畫面） ---------- */
 const CANVAS_OPTS = [['base','空白頁'],['stickies','園遊會便利貼 6 張'],['bulkBefore','彩色便利貼（含粉紅）'],['bulkLocked','粉紅便利貼已鎖定'],['gramBefore','文字段落（有錯字）'],['attBefore','含外部連結'],['cls2','只選 2 張便利貼'],['sel','選取 3 個物件']];
 const CANVAS_NAME = Object.assign(Object.fromEntries(CANVAS_OPTS), { clsDone: '分群結果頁（第 2/2 頁）', court: '籃球場背景', sumDone: '摘要已加入', groupDone: '4 組討論區', groupTeam: '3 組＋記分板', brainDone: '腦力激盪 8 張', attDone: '連結彙整頁（第 2/4 頁）', attStay: '含外部連結（第 1/4 頁）', clsStay: '園遊會便利貼（第 1/2 頁）', gramDone: '錯字已更正', math: '數學小工具', sci: '自然科學小工具', chi: '國語文小工具', eng: '英文小工具', quiz: '測驗小工具', team: '小組活動小工具', split: '三分割畫布', stickLock: 'AI 編輯中', bulkLock: 'AI 編輯中', gramLock: 'AI 編輯中', attLock: 'AI 編輯中', brainLock: 'AI 編輯中' });
+const canvasName = k => { let m; return (m = /^grp(T?)(\d)$/.exec(k)) ? `${m[2]} 組討論區${m[1] ? '＋記分板' : ''}` : (m = /^selC(.+)$/.exec(k)) ? `選取 3 個物件（2 個改${m[1]}色）` : (m = /^stkC(.+)$/.exec(k)) ? `園遊會便利貼（2 張改${m[1]}色）` : CANVAS_NAME[k] || k; };
 const ENV = [
   ['quotaMode', 'AI 點數', [['ok','充足'],['low','低於 20%'],['last','下一則用完'],['empty','已用完']]],
   ['net', '網路', [['ok','正常'],['off','離線']]],
   ['nextErr', '下一則回應', [[null,'正常'],['parse','解析錯誤'],['halt','任務中斷']]]];
 const TRY = [
   ['Skill', ['/', '/group', '/group 10', '/classify', '/summarize', '/grammar-check', '/attachment', '/bulk-edit 把粉紅色便利貼改成白色', '/bulk-edit 把紅色便利貼改成白色', '/bulk-edit 把文字改成粗體', '/bulk-edit']],
+  ['功能限制', ['/group 10', '/group 6', '幫我分成 5 組', '/bulk-edit 把粉紅色便利貼改成藍色', '/bulk-edit 把粉紅色便利貼改成彩虹漸層', '/bulk-edit 把圖片改成白色', '/bulk-edit 把選取物件改成白色', '幫我把便利貼分類', '幫我訂便當']],
   ['能力範圍', ['課堂講解', '腦力激盪', '小組討論', '請幫我開啟分割畫布']],
   ['一般對話', ['請換成籃球場背景', '請檢查這頁有無錯別字', '1 加到 10 =', '請幫我整理這頁便利貼的重點', '什麼是畢氏定理？', '畫一個 80°-60°-40° 的三角形', '請把這頁的便利貼依顏色分組', '（不適宜內容測試）']]];
+/* ---------- 動畫規格：數值與上方 CSS／流程一致，改動畫時同步改這裡 ---------- */
+const MOTION = [
+  ['spark', '處理中星芒', '理解需求中、執行任務中', '星芒縮放 0.8→1→0.8，同時旋轉 0°→90°', '1.2s · ease-in-out · 循環', '放慢為 4s'],
+  ['shimmer', '狀態文字微光', '理解需求中、執行任務中', '亮帶（#d0d0d0，寬約 30%）由左到右掃過文字', '1.6s · linear · 循環', '放慢為 4s'],
+  ['lock', 'AI 編輯中鎖定區', 'AI 開始修改畫布，到完成為止', '鎖定區蓋半透明白色遮罩（bg/control 55%）＋primary 2px 外框＋左下「AI 編輯中」標籤，0.4s 淡入；遮罩上有白色光帶（寬 28%、最高 32% 不透明）由左掃到右；外框光暈呼吸（外框 0→2px、光暈 8→20px）', '掃光 2.6s、呼吸 2.4s · ease-in-out · 循環', '掃光停用，呼吸放慢為 4s']];
 /* ---------- 測試任務：給角色與目標，依實際操作自動打勾 ---------- */
 const has = (type, test) => S.log.some(([t, v]) => t === type && (!test || (typeof test === 'string' ? v === test : test(v))));
 const after = (a, b) => { const i = S.log.findIndex(([t]) => t === a); return i >= 0 && S.log.slice(i + 1).some(([t]) => t === b); };
@@ -735,6 +830,21 @@ const TASKS = [
   { t: '分組後復原', who: '分錯組了想退回', env: { bg: 'stickies' },
     steps: [['送出 /group', () => has('send', v => v.startsWith('/group'))], ['選組數', () => has('pick', v => /組$/.test(v))], ['按「復原」', () => has('undo')]],
     recap: '復原只在最新一則成功回饋上。' },
+  { t: '組數上限', who: '全班 30 人，想分 10 組', env: {},
+    steps: [['送出 /group 10', () => has('limit', 'group')], ['改送 /group 6', () => S.bg === 'grp6']],
+    recap: '組數限 2–8；版型依組數自動排列。' },
+  { t: '批次改色的限制', who: '想一次改一批便利貼的樣式', env: { bg: 'bulkBefore' },
+    steps: [['試「把文字改成粗體」', () => has('limit', 'bulk-action')], ['試「把粉紅色便利貼改成彩虹漸層」', () => has('limit', 'bulk-color')], ['改成支援的顏色（如藍色）', () => has('ok', v => /張便利貼更新為/.test(v))]],
+    recap: '只支援改顏色，且限 8 種基礎色。' },
+  { t: '改到鎖定的便利貼', who: '便利貼被鎖住了還想改色', env: { bg: 'bulkLocked' },
+    steps: [['送出「把粉紅色便利貼改成白色」', () => has('confirm')], ['按「確定」', () => has('cyes') && has('ok')]],
+    recap: '鎖定物件會先詢問，確定後才解鎖並修改。' },
+  { t: '選取物件部分略過', who: '選了 3 個物件想一起改色', env: { bg: 'sel' },
+    steps: [['送出「把選取物件改成白色」', () => has('partial')]],
+    recap: '不支援或鎖定的物件會略過，並在回覆說明數量。' },
+  { t: '便利貼太少不能分群', who: '只選了 2 張就想分群', env: { bg: 'cls2' },
+    steps: [['送出 /classify', () => has('limit', 'classify')], ['取消選取後再送一次', () => S.bg === 'clsStay' || S.bg === 'clsDone']],
+    recap: '分群至少要 3 張；取消選取後改以整頁為範圍。' },
   { t: '斷網重試', who: '教室網路不穩', env: { bg: 'stickies', net: 'off' },
     steps: [['送出「依顏色分組」', () => has('send', v => /依顏色分組/.test(v))], ['網路切回「正常」', () => has('err') && S.net === 'ok'], ['按「再試一次」', () => after('retry', 'ok')]],
     recap: '重試成功後錯誤訊息不保留。' },
@@ -754,13 +864,13 @@ function renderTasks() {
   TASKS.forEach((tk, k) => {
     if (k !== curTask) { h += `<button type="button" class="tk" data-task="${k}">${tk.t}</button>`; return; }
     const done = tk.steps.map(s => !!s[1]()), all = done.every(Boolean);
-    h += `<div class="tk on"><div class="th"><b>${tk.t}</b><button type="button" class="again" data-task="${k}" aria-label="重來">↺</button></div><p class="who">${tk.who}</p><ol>${tk.steps.map((s, i) => `<li class="${done[i] ? 'ok' : ''}">${s[0]}</li>`).join('')}</ol>${all ? `<p class="recap">✓ ${tk.recap}</p>${k + 1 < TASKS.length ? `<button type="button" class="nx" data-task="${k + 1}">下一個 →</button>` : ''}` : ''}</div>`;
+    h += `<div class="tk on"><div class="th"><b>${tk.t}</b><button type="button" class="again" data-task="${k}" aria-label="重來" title="重來"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button></div><p class="who">${tk.who}</p><ol>${tk.steps.map((s, i) => `<li class="${done[i] ? 'ok' : ''}">${s[0]}</li>`).join('')}</ol>${all ? `<p class="recap">✓ ${tk.recap}</p>${k + 1 < TASKS.length ? `<button type="button" class="nx" data-task="${k + 1}">下一個 →</button>` : ''}` : ''}</div>`;
   });
   box.innerHTML = h + '</div>';
 }
 function syncPanel() {
   renderTasks();
-  $('cv').innerHTML = `目前畫布：<b>${CANVAS_NAME[S.bg] || S.bg}</b>`;
+  $('cv').innerHTML = `目前畫布：<b>${canvasName(S.bg)}</b>`;
   document.querySelectorAll('[data-canvas]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.canvas === S.bg)));
   document.querySelectorAll('[data-env]').forEach(b => b.setAttribute('aria-pressed', String(String(S[b.dataset.env]) === b.dataset.v)));
 }
@@ -787,6 +897,35 @@ $('panel').addEventListener('click', e => {
   if (b.dataset.env) return setEnv(b.dataset.env, b.dataset.v);
   if (b.dataset.try != null) return fillTry(b.dataset.try);
 });
+/* ---------- 動畫規格分頁 ---------- */
+const MV = $('motionView'), wrap = $('wrap'), LOOPS = ['spark','shimmer','lock'];
+let mTimers = {};
+const mT = (k, ms, f) => { (mTimers[k] = mTimers[k] || []).push(setTimeout(f, ms)); };
+const mClear = k => { (mTimers[k] || []).forEach(clearTimeout); mTimers[k] = []; };
+const DEMOS = {
+  spark: b => { b.innerHTML = `<div style="zoom:3">${IC.spark}</div>`; },
+  shimmer: b => { b.innerHTML = `<div class="status" style="font-size:22px;align-self:center">${IC.spark}<span class="shimmer">正在執行任務</span></div>`; },
+  lock: b => { b.classList.add('cv'); b.innerHTML = '<div style="position:relative;width:339px;height:234px;background:url(img/stickLock.jpg) -341.4px -95px / 844.8px 475.2px no-repeat"><div class="sweep on" style="left:8.8px;top:8.8px;width:321.2px;height:216.5px;border-radius:4px"></div></div>'; }
+};
+function playDemo(k) {
+  const box = MV.querySelector(`[data-demo="${k}"]`); if (!box) return;
+  mClear(k); box.className = 'mdemo';
+  const dur = DEMOS[MOTION[k][0]](box, k);
+  if (dur && wrap.classList.contains('motion') && !matchMedia('(prefers-reduced-motion: reduce)').matches) mT(k, dur, () => playDemo(k));
+}
+function setView(v) {
+  const on = v === 'motion'; wrap.classList.toggle('motion', on);
+  $('vt').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.view === v)));
+  MOTION.forEach((_, k) => mClear(k));
+  if (!on) { fit(); return; }
+  if (!MV.firstChild) {
+    const card = ([key, n, when, how, time, rm], k) => `<article class="mcard"><div class="mdemo" data-demo="${k}"></div><div class="mhead"><b>${n}</b>${LOOPS.includes(key) ? '<small>循環播放</small>' : `<button type="button" class="rst" data-replay="${k}">重播</button>`}</div><dl class="mspec"><dt>觸發</dt><dd>${when}</dd><dt>動作</dt><dd>${how}</dd><dt>時間／曲線</dt><dd><code>${time}</code></dd><dt>減少動態</dt><dd>${rm}</dd></dl></article>`;
+    MV.innerHTML = MOTION.map(card).join('');
+  }
+  MOTION.forEach((_, k) => playDemo(k));
+}
+$('vt').addEventListener('click', e => { const b = e.target.closest('[data-view]'); if (b) setView(b.dataset.view); });
+MV.addEventListener('click', e => { const b = e.target.closest('[data-replay]'); if (b) playDemo(+b.dataset.replay); });
 $('reset').onclick = () => { curTask = -1; clearTimers(); S = fresh(); render(); syncPanel(); };
 const _render = render; render = function () { _render(); if ($('cv')) syncPanel(); };
 S = fresh(); render(); syncPanel();
